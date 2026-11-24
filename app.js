@@ -656,9 +656,9 @@
   function stMsg(text, kind) { var m = $("st-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = text; if (!text) m.classList.add("hide"); }
   // wallet views inside the Stars sheet: st-main (balance, Send / Receive / Buy, History), st-body (Buy packs), st-send,
   // st-done (sent), st-recv (Receive), st-terms
-  var ST_VIEWS = ["st-main", "st-body", "st-send", "st-done", "st-recv", "st-terms"];
+  var ST_VIEWS = ["st-main", "st-body", "st-send", "st-done", "st-recv", "st-terms", "st-drop"];
   var ST_HEAD = { "st-main": ["Stars", "Your Group City balance"], "st-body": ["Buy Stars", "Top up your Group City balance"], "st-send": ["Send Stars", "To another Group City user"],
-    "st-done": ["Send Stars", "To another Group City user"], "st-recv": ["Receive Stars", "Share your ID or username"], "st-terms": ["Buy Stars", "Top up your Group City balance"] };
+    "st-done": ["Send Stars", "To another Group City user"], "st-recv": ["Receive Stars", "Share your ID or username"], "st-terms": ["Buy Stars", "Top up your Group City balance"], "st-drop": ["Airdrop", "Free Stars for members"] };
   function stOnly(id) {
     ST_VIEWS.forEach(function (x) { $(x).classList.toggle("hide", x !== id); });
     stars.view = id;
@@ -2659,6 +2659,8 @@
   $("st-back").onclick = stBack;
   $("st-a-send").onclick = function () { sdReset(""); stOnly("st-send"); };
   $("st-a-recv").onclick = function () { stOnly("st-recv"); rcMsg("", ""); renderRecv(); };
+  $("st-a-drop").onclick = function () { stOnly("st-drop"); };
+  $("dr-ok").onclick = function () { stOnly("st-main"); };
   $("st-a-buy").onclick = function () { stars.need = 0; stars.pick = 0; stMsg("", ""); stOnly("st-body"); renderPacks(); };
   $("sd-to").addEventListener("input", function () { sdLookup(false); });
   $("sd-to").addEventListener("change", function () { sdLookup(true); });
