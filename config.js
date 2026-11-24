@@ -5,5 +5,5 @@ window.GC_CONFIG = {
   BOT: "GroupCity_Bot",                                                     // bot username, without @
   // Group categories (chips on the Groups page + the picker in Promote). To add one, add it here AND to the
   // worker (CATEGORIES in server.ts, or the Cloudflare variable CATEGORIES = comma list). Names must match exactly.
-  CATEGORIES: ["Chatting Group", "Dating Group"]
+  CATEGORIES: ["Chatting Group", "Dating Group", "Videos Group"]
 };
