@@ -106,6 +106,8 @@
   <!-- Messages -->
   <section id="v-msg" class="hide">
     <div id="msg-login" class="hide"></div>
+    <!-- My Day strip (stories): own "Add" circle first, then people with active stories, newest first -->
+    <div class="days hide" id="days" role="list" aria-label="My Day"></div>
     <div class="chats" id="chats">
       <button class="crow" id="row-support" type="button">
         <span class="av cav av-ico" style="background:linear-gradient(#ff8a7a,#e5534b)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="13" width="4" height="6" rx="1.6"/><rect x="17" y="13" width="4" height="6" rx="1.6"/><path d="M19 19c0 1.5-2 2.5-5 2.5"/></svg></span>
@@ -122,21 +124,25 @@
     <div class="msg hide" id="chats-msg" style="margin:12px 16px"></div>
   </section>
 
-  <!-- Profile -->
+  <!-- Profile (Telegram-style: big avatar, name, My Day / Edit Info / Settings, info card) -->
   <section id="v-profile" class="hide">
-    <div class="top"><div class="toprow"><div><div class="title">Profile</div><div class="sub">Your account and groups</div></div></div></div>
     <div id="pf-login" class="hide"></div>
     <div id="pf-body" class="hide">
-      <div class="pcard">
-        <div class="av pav" id="pf-av"></div>
+      <div class="pfhero">
+        <button class="pfavb" id="pf-avb" type="button" aria-label="Profile photo"><span class="av pav" id="pf-av"></span></button>
         <div class="pname"><span id="pf-name"></span><span class="chip-admin hide" id="pf-admin">Admin</span></div>
-        <div class="puser" id="pf-user"></div>
       </div>
+      <div class="iacts pfacts">
+        <button class="iact" id="pf-myday" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12V8.5a2 2 0 0 0-2-2h-2.2l-1.5-2.2H9.2L7.7 6.5H5.5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h8.5"/><circle cx="12" cy="12.4" r="3.4"/><path d="M19 15.5v6M16 18.5h6"/></svg><span>My Day</span></button>
+        <button class="iact" id="pf-edit" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19.3 8.7a2.1 2.1 0 0 0 0-3L18.3 4.7a2.1 2.1 0 0 0-3 0L4 16z"/><path d="m13.5 6.5 4 4"/></svg><span>Edit Info</span></button>
+        <button class="iact" id="pf-settings" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.2h3.4l.5 2.4 1.6.9 2.3-.8 1.7 2.9-1.8 1.6v1.6l1.8 1.6-1.7 2.9-2.3-.8-1.6.9-.5 2.4h-3.4l-.5-2.4-1.6-.9-2.3.8-1.7-2.9 1.8-1.6v-1.6L4.2 8.6l1.7-2.9 2.3.8 1.6-.9z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
+      </div>
+      <div class="msg hide" id="pf-msg"></div>
+      <div class="icard iabout pfabout hide" id="pf-about"></div>
       <button class="pfstars" id="pf-stars" type="button"><svg class="stico" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="sg4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd34e"/><stop offset="1" stop-color="#f5a623"/></linearGradient></defs><path fill="url(#sg4)" d="M12 2.2l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.1l-5.9 3.2 1.3-6.6-4.9-4.6 6.6-.8z"/></svg><span class="pfs-l">Stars balance</span><span class="pfs-v" id="pf-stars-v">0</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
       <div id="pf-chatlogin" class="hide"></div>
       <div class="sec">📋 My promoted groups</div>
       <div id="mine"><div class="empty">Loading…</div></div>
-      <button class="ghost wide hide" id="pf-logout" type="button">Log out</button>
     </div>
   </section>
 </div>
@@ -224,6 +230,78 @@
     <div class="msg err hide" id="ed-msg"></div>
   </div>
   <div class="emopanel hide" id="ed-emop"><div class="emotabs" id="ed-emot"></div><div class="emogrid" id="ed-emog"></div></div>
+</section>
+
+<!-- Edit Info (own profile): photo, first / last name, bio — Telegram Android "Account" screen -->
+<section id="v-pedit" class="screen info edit hide" aria-label="Edit Info">
+  <div class="ehead">
+    <button class="back" id="pe-back" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5.5 4.5 12l6.5 6.5"/></svg></button>
+    <div class="etitle">Edit Info</div>
+    <button class="esave" id="pe-save" type="button">Save</button>
+  </div>
+  <div class="ebody" id="pe-body">
+    <div class="pehero">
+      <button class="peavb" id="pe-avb" type="button" aria-label="Set New Photo"><span class="av peav" id="pe-av"></span><span class="pecam" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5a2 2 0 0 1 2-2h2.2l1.5-2.2h4.6l1.5 2.2H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.6" r="3.4"/></svg></span></button>
+    </div>
+    <div class="icard pecard">
+      <button class="ephoto" id="pe-photo" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12V8.5a2 2 0 0 0-2-2h-2.2l-1.5-2.2H9.2L7.7 6.5H5.5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h8.5"/><circle cx="12" cy="12.4" r="3.4"/><path d="M19 15.5v6M16 18.5h6"/></svg><span>Set New Photo</span></button>
+      <button class="ephoto red hide" id="pe-rmphoto" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5h15M9.5 6.5V4.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3v1.7M6.5 6.5l.9 12.6c.1 1 .9 1.9 2 1.9h5.2c1 0 1.9-.8 2-1.9l.9-12.6M10 10.5v6.5M14 10.5v6.5"/></svg><span>Remove Photo</span></button>
+    </div>
+    <div class="icard pecard">
+      <div class="pelabel">Your name</div>
+      <input class="pein" id="pe-first" type="text" maxlength="64" placeholder="First name (required)" autocomplete="given-name" aria-label="First name" enterkeyhint="next">
+      <div class="esep"></div>
+      <input class="pein" id="pe-last" type="text" maxlength="64" placeholder="Last name" autocomplete="family-name" aria-label="Last name (optional)" enterkeyhint="next">
+    </div>
+    <div class="icard pecard pebio"><textarea id="pe-bio" rows="1" maxlength="70" placeholder="Bio" aria-label="Bio"></textarea><span class="pecount" id="pe-count" aria-live="polite">70</span></div>
+    <div class="pehelp">A few words about you.</div>
+    <input id="pe-file" type="file" accept="image/*" class="hide" aria-hidden="true" tabindex="-1">
+    <div class="msg err hide" id="pe-msg"></div>
+  </div>
+</section>
+
+<!-- Settings (gear on the Profile tab) -->
+<section id="v-set" class="screen info edit hide" aria-label="Settings">
+  <div class="ehead">
+    <button class="back" id="set-back" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5.5 4.5 12l6.5 6.5"/></svg></button>
+    <div class="etitle">Settings</div>
+    <span class="ehsp" aria-hidden="true"></span>
+  </div>
+  <div class="ebody">
+    <div class="sethd" id="set-theme-l">Theme</div>
+    <div class="icard setcard"><div class="seg" id="set-theme" role="radiogroup" aria-labelledby="set-theme-l">
+      <button type="button" role="radio" data-theme="system">System</button><button type="button" role="radio" data-theme="light">Light</button><button type="button" role="radio" data-theme="dark">Dark</button>
+    </div></div>
+    <div class="icard setcard">
+      <button class="setrow" id="set-stars" type="button"><svg class="stico" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="sg5" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd34e"/><stop offset="1" stop-color="#f5a623"/></linearGradient></defs><path fill="url(#sg5)" d="M12 2.2l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.1l-5.9 3.2 1.3-6.6-4.9-4.6 6.6-.8z"/></svg><span class="setl">Stars balance</span><span class="setv" id="set-stars-v">0</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <button class="setrow" id="set-help" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.6"/><circle cx="12" cy="17" r=".6" class="dot"/></svg><span class="setl">Payment help</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <button class="setrow" id="set-terms" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4v13H7a1.5 1.5 0 0 1-1.5-1.5V5A1.5 1.5 0 0 1 7 3.5z"/><path d="M14 3.5V8h4M9 12h6M9 15.5h6"/></svg><span class="setl">Terms</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      <button class="setrow" id="set-support" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="13" width="4" height="6" rx="1.6"/><rect x="17" y="13" width="4" height="6" rx="1.6"/><path d="M19 19c0 1.5-2 2.5-5 2.5"/></svg><span class="setl">Contact support</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+    </div>
+    <div class="icard setcard hide" id="set-out"><button class="setrow red" id="set-logout" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5H7A1.5 1.5 0 0 0 5.5 6v12A1.5 1.5 0 0 0 7 19.5h7M10.5 12h10M17 8.5l3.5 3.5-3.5 3.5"/></svg><span class="setl">Log out</span></button></div>
+  </div>
+</section>
+
+<!-- My Day: preview before sharing (photo + optional caption) -->
+<section id="v-spost" class="screen story hide" aria-label="New story">
+  <div class="sthead2"><button class="sbtn" id="sp-close" type="button" aria-label="Cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button><div class="sptitle">My Day</div></div>
+  <div class="spimg"><img id="sp-img" alt="Story preview"></div>
+  <div class="msg err hide" id="sp-msg"></div>
+  <div class="spfoot">
+    <div class="spcap"><textarea id="sp-cap" rows="1" maxlength="200" placeholder="Add a caption…" aria-label="Caption"></textarea><span class="spcount" id="sp-count">200</span></div>
+    <button class="spshare" id="sp-share" type="button">Share</button>
+  </div>
+</section>
+<input id="sp-file" type="file" accept="image/*" class="hide" aria-hidden="true" tabindex="-1">
+
+<!-- My Day viewer: progress bars, auto-advance, tap left / right, swipe down to close -->
+<section id="v-sview" class="screen story view hide" aria-label="My Day">
+  <div class="svbars" id="sv-bars"></div>
+  <div class="svhead"><span class="av svav" id="sv-av"></span><div class="svwho"><div class="svname" id="sv-name"></div><div class="svtime" id="sv-time"></div></div>
+    <button class="sbtn hide" id="sv-del" type="button" aria-label="Delete story"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5h15M9.5 6.5V4.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3v1.7M6.5 6.5l.9 12.6c.1 1 .9 1.9 2 1.9h5.2c1 0 1.9-.8 2-1.9l.9-12.6M10 10.5v6.5M14 10.5v6.5"/></svg></button><button class="sbtn" id="sv-close" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="svstage" id="sv-stage"><img id="sv-img" alt=""><div class="svload hide" id="sv-load"><span class="spin"></span></div><div class="svgone hide" id="sv-gone">This story is no longer available.</div>
+    <button class="svtap l" id="sv-prev" type="button" aria-label="Previous"></button><button class="svtap r" id="sv-next" type="button" aria-label="Next"></button></div>
+  <div class="svcap hide" id="sv-cap"></div>
 </section>
 
 <!-- Message menu -->

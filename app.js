@@ -12,19 +12,40 @@
   var inTg = !!(tg && tg.initData);          // opened inside Telegram (signed data present)
   if (inTg) {
     document.documentElement.classList.add("tg");
-    try { tg.ready(); tg.expand(); if (tg.setHeaderColor) tg.setHeaderColor("bg_color"); } catch (e) {}
+    try { tg.ready(); tg.expand(); } catch (e) {}   // header colour: applyTheme below
   }
-  // light / dark look: Telegram's colorScheme inside Telegram, the device setting in a browser (style only)
-  (function () {
+  // light / dark look. Settings → Theme: "system" (default) = Telegram's colorScheme inside Telegram, the device setting
+  // in a browser; "light" / "dark" = always that look (saved on this device as gc_theme; html.thx turns off
+  // Telegram's own theme colours so the choice really applies inside Telegram too).
+  var THKEY = "gc_theme";
+  function themePref() { var v = ""; try { v = localStorage.getItem(THKEY) || ""; } catch (e) {} return v === "light" || v === "dark" ? v : "system"; }
+  var applyTheme = (function () {
     var root = document.documentElement, mq = null;
-    try { mq = !inTg && window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null; } catch (e) {}
-    function apply() { root.classList.toggle("dark", inTg ? tg.colorScheme === "dark" : !!(mq && mq.matches)); }
+    try { mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null; } catch (e) {}
+    function apply() {
+      var p = themePref();
+      var dark = p === "dark" ? true : p === "light" ? false : (inTg ? tg.colorScheme === "dark" : !!(mq && mq.matches));
+      root.classList.toggle("dark", dark);
+      root.classList.toggle("thx", p !== "system");
+      if (inTg) {
+        try {
+          if (tg.setHeaderColor) tg.setHeaderColor(p === "system" ? "bg_color" : (dark ? "#17212b" : "#ffffff"));
+          if (tg.setBackgroundColor) tg.setBackgroundColor(p === "system" ? "bg_color" : (dark ? "#17212b" : "#ffffff"));
+        } catch (e) {}
+      }
+    }
     apply();
     try {
       if (inTg && tg.onEvent) tg.onEvent("themeChanged", apply);
-      else if (mq && mq.addEventListener) mq.addEventListener("change", apply);
+      if (!inTg && mq && mq.addEventListener) mq.addEventListener("change", apply);
     } catch (e) {}
+    return apply;
   })();
+  function setTheme(p) {
+    p = p === "light" || p === "dark" ? p : "system";
+    try { if (p === "system") localStorage.removeItem(THKEY); else localStorage.setItem(THKEY, p); } catch (e) {}
+    applyTheme();
+  }
 
   var data = { featured: [], groups: [], bot: BOT, short: "", price: 10, topPrice: 50, days: 30 };
   var cat = "All", pkg = "top", busy = false, mineLoaded = false, current = "groups";
@@ -221,10 +242,10 @@
   }
   function packMsg(m) {
     var x = { i: m.id, t: String(m.text || ""), a: m.at || "" };
-    if (m.u) x.u = m.u; if (m.mine) x.m = 1; if (m.name) x.n = m.name; if (m.admin) x.d = 1; if (m.photo) x.p = m.photo;
+    if (m.u) x.u = m.u; if (m.mine) x.m = 1; if (m.name) x.n = m.name; if (m.admin) x.d = 1; if (m.photo) x.p = m.photo; if (m.pv) x.v = String(m.pv);
     return x;
   }
-  function unpackMsg(x) { return { id: Number(x.i), text: x.t || "", at: x.a || "", u: x.u || "", mine: !!x.m, name: x.n || "", admin: !!x.d, photo: x.p || "" }; }
+  function unpackMsg(x) { return { id: Number(x.i), text: x.t || "", at: x.a || "", u: x.u || "", mine: !!x.m, name: x.n || "", admin: !!x.d, photo: x.p || "", pv: x.v || "" }; }
   function readCache(room, uid) {
     var k = cacheKey(room, uid); if (!k) return null;
     try {
@@ -340,16 +361,21 @@
   // avatar: photo (https only) with letter fallback
   function avatar(photo, name, seed, cls) {
     var a = el("span", cls || "mav", letter(name)); a.style.background = color(seed);
-    var src = safeUrl(photo);
-    if (src) {
-      var img = document.createElement("img");
-      img.alt = ""; img.referrerPolicy = "no-referrer"; img.loading = "lazy";
-      img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%";
-      img.onerror = function () { if (img.parentNode) img.parentNode.removeChild(img); a.textContent = letter(name); };
-      img.onload = function () { a.textContent = ""; a.appendChild(img); };
-      img.src = src;
-    }
+    setAvImg(a, photo, name);
     return a;
+  }
+  // puts a photo (https, or a custom profile data:image/jpeg) into an avatar; letter while loading / on error
+  function setAvImg(a, photo, name) {
+    var src = photoOk(photo);
+    a.gcSrc = src;
+    if (!src) { a.textContent = letter(name); return; }
+    var img = document.createElement("img");
+    img.alt = ""; img.referrerPolicy = "no-referrer"; img.loading = "lazy";
+    img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%";
+    img.onerror = function () { if (img.parentNode) img.parentNode.removeChild(img); if (a.gcSrc === src) a.textContent = letter(name); };
+    img.onload = function () { if (a.gcSrc !== src) return; a.textContent = ""; a.appendChild(img); };
+    if (/^data:/.test(src)) { a.textContent = ""; a.appendChild(img); }   // local data: shows at once
+    img.src = src;
   }
   function card(g, top) {
     var c = el("div", "card");
@@ -428,7 +454,7 @@
     $("acct-row").classList.toggle("hide", inTg);
     if (inTg) { box.classList.add("hide"); }
     else if (u) {
-      box.appendChild(avatar(u.photo_url, u.first_name || u.username || "U", String(u.id || ""), "av-s")); box.appendChild(el("span", "nm", userLabel(u)));
+      box.appendChild(avatar(myPhoto(), myName(), String(u.id || ""), "av-s")); box.appendChild(el("span", "nm", userLabel(u)));
       box.onclick = function () { tab("profile"); }; box.style.cursor = "pointer";
       box.classList.remove("hide");
     } else {
@@ -603,7 +629,7 @@
   function setBal(n) {
     stars.bal = n == null ? null : Math.max(0, Math.floor(Number(n) || 0));
     var t = fmtStars(stars.bal || 0);
-    $("hd-bal").textContent = t; $("st-bal").textContent = t; $("pr-bal-n").textContent = t; $("pf-stars-v").textContent = t;
+    $("hd-bal").textContent = t; $("st-bal").textContent = t; $("pr-bal-n").textContent = t; $("pf-stars-v").textContent = t; $("set-stars-v").textContent = t;
     $("hd-stars").setAttribute("aria-label", "Stars balance: " + t);
     lowCheck();
   }
@@ -878,11 +904,12 @@
     var ok = needChat($("msg-login"), "Log in to chat", "Log in with your Telegram account to message support and chat with everyone.", "login-msgtab");
     $("chats").classList.toggle("hide", !ok);
     $("chats-msg").classList.add("hide");
-    if (!ok) { $("msg-none").classList.add("hide"); return; }
+    if (!ok) { $("msg-none").classList.add("hide"); renderDays(); return; }
     var admin = !!getChat().isAdmin;
     $("sup-prev").textContent = admin ? "Support inbox" : "Message the Group City team";
     muteIcons(); filterChats();
     loadSummary(false);
+    loadStories(false);   // My Day strip (renders the cached list at once)
   }
   // Messages search: filter the chat rows by name / last message (live, as you type)
   var CHAT_ROWS = [{ row: "row-support", name: "Support", prev: "sup-prev" }, { row: "row-public", name: "Group City Chat", nameEl: "pub-name", prev: "pub-prev" }];
@@ -982,7 +1009,11 @@
     else if (!admin && need("support", d.support)) warmChat("support", "");
   }
   // keeps the Messages list and the unread badge fresh (not while a chat is open: the chat polls itself)
-  setInterval(function () { if (!document.hidden && chatReady() && screens[screens.length - 1] !== "v-chat") loadSummary(true); }, 20000);
+  setInterval(function () {
+    if (document.hidden || !chatReady() || screens[screens.length - 1] === "v-chat") return;
+    loadSummary(true);
+    if (current === "msg" && !screens.length) loadStories(false);   // My Day list: at most once a minute (no photos)
+  }, 20000);
 
   // ---------- screens (support inbox, chat) ----------
   var screens = [];   // open screen ids, top last
@@ -998,6 +1029,9 @@
     if (id === "v-threads") stopThreadPoll();
     if (id === "v-info") info = null;
     if (id === "v-edit") { edShowEmo(false); ed = null; }
+    if (id === "v-pedit") pe = null;
+    if (id === "v-spost") sp = null;
+    if (id === "v-sview") { svStop(); sv = null; }
     syncBack();
   }
   function goBack() {
@@ -1031,7 +1065,7 @@
       if (!th.length) { var e = el("div", "cempty"); e.appendChild(el("b", null, "No support messages yet")); e.appendChild(document.createTextNode("When a user writes to support, the thread shows here.")); box.appendChild(e); return; }
       th.forEach(function (t) {
         var row = el("button", "crow"); row.type = "button";
-        row.appendChild(avatar(t.photo, t.name, t.u, "av cav"));
+        row.appendChild(uAvatar({ u: t.u, pv: t.pv, photo: t.photo, name: t.name }, "av cav"));
         var info = el("span", "cinfo"), top = el("span", "ctop"), bot = el("span", "cbot");
         var nm = el("span", "cname", t.name + (t.username ? "  @" + t.username : ""));
         var nmw = el("span", "cnm"); nmw.appendChild(nm);
@@ -1041,7 +1075,7 @@
         var tm = isMuted("support", String(t.uid));
         if (t.waiting) { bot.appendChild(el("span", "cbadge dot " + (tm ? "muted" : "unm"))); if (!tm) top.lastChild.classList.add("unread"); }
         info.appendChild(top); info.appendChild(bot); row.appendChild(info);
-        row.onclick = function () { openChat({ room: "support", uid: String(t.uid), title: t.name, username: t.username || "", sub: (t.username ? "@" + t.username + " · " : "") + "ID " + t.uid, photo: t.photo, seed: t.u }); };
+        row.onclick = function () { openChat({ room: "support", uid: String(t.uid), title: t.name, username: t.username || "", sub: (t.username ? "@" + t.username + " · " : "") + "ID " + t.uid, photo: t.photo, seed: t.u, pv: t.pv }); };
         box.appendChild(row);
       });
     }).catch(function () { thBusy = false; });
@@ -1065,10 +1099,10 @@
     if (!chatReady()) { tab("msg"); return; }
     stopPoll(); closePop(); closeSearch(true);
     ch = { room: o.room, uid: o.uid || "", msgs: [], pend: [], admin: !!getChat().isAdmin, loaded: false, cached: false, slow: false, sub: "",
-      info: { title: o.title || "", username: o.username || "", photo: o.photo || "", seed: o.seed || "" } };
+      info: { title: o.title || "", username: o.username || "", photo: o.photo || "", seed: o.seed || "", pv: o.pv || "" } };
     var hav = $("ch-av"), nav;
     if (o.room === "public") { nav = pubAvatar("av cav"); $("ch-title").textContent = pubInfo().name; $("ch-sub").textContent = "Everyone on Group City"; }
-    else if (o.uid) { nav = avatar(o.photo, o.title, o.seed, "av cav"); $("ch-title").textContent = o.title || "User"; $("ch-sub").textContent = o.sub || "Support thread"; }
+    else if (o.uid) { nav = uAvatar({ u: o.seed, pv: o.pv, photo: o.photo, name: o.title }, "av cav"); $("ch-title").textContent = o.title || "User"; $("ch-sub").textContent = o.sub || "Support thread"; }
     else { nav = el("span", "av cav", "🆘"); nav.style.background = "#e5534b"; $("ch-title").textContent = "Support"; $("ch-sub").textContent = "Ask the Group City team anything"; }
     nav.id = "ch-av"; hav.parentNode.replaceChild(nav, hav);
     ch.sub = $("ch-sub").textContent; renderSub();
@@ -1158,8 +1192,11 @@
       if (!m.mine) {
         var av;
         if (m.admin && m.name === "Support") { av = el("span", "mav", "🆘"); av.style.background = "#e5534b"; }
-        else av = avatar(m.photo, m.name, m.u, "mav");
-        if (!lastOfRun) av.classList.add("sp");
+        else {
+          av = uAvatar(m, "mav");
+          if (av.classList.contains("ring")) (function (u) { av.onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); var g = storyGroup(u); if (g) openViewer([g], 0); }; })(m.u);
+        }
+        if (!lastOfRun) { av.classList.add("sp"); av.classList.remove("ring", "seen"); av.onclick = null; }
         row.appendChild(av);
       }
       var b = el("div", "bub");
@@ -1196,7 +1233,7 @@
     var my = ch; sending = true; $("ch-send").disabled = true;
     var body = { action: "send", room: ch.room, text: text }; if (ch.uid) body.uid = ch.uid;
     // optimistic bubble with a clock until the server confirms it
-    var u = anyUser() || {}, pm = { id: "p" + (++pendSeq), pend: true, text: text, at: new Date().toISOString(), u: "me", mine: true, name: u.first_name || "" };
+    var u = anyUser() || {}, pm = { id: "p" + (++pendSeq), pend: true, text: text, at: new Date().toISOString(), u: "me", mine: true, name: myName() || u.first_name || "" };
     ch.pend.push(pm);
     $("ch-text").value = ""; autoGrow(); chatErr("");
     renderMsgs(); toBottom();
@@ -1312,7 +1349,7 @@
     var a;
     if (o.kind === "group") a = pubAvatar("av iav");
     else if (o.kind === "support") { a = el("span", "av iav", "🆘"); a.style.background = "#e5534b"; }
-    else a = avatar(ch.info.photo, ch.info.title, ch.info.seed, "av iav");
+    else a = uAvatar({ u: ch.info.seed, pv: ch.info.pv, photo: ch.info.photo, name: ch.info.title }, "av iav");
     a.id = "ci-av";
     var old = $("ci-av"); old.parentNode.replaceChild(a, old);
   }
@@ -1368,7 +1405,7 @@
     if (!ms.length) { box.appendChild(el("div", "iempty", "No members yet")); return; }
     ms.forEach(function (m) {
       var row = el("div", "irow");
-      row.appendChild(avatar(m.photo, m.name, m.u, "av imav"));
+      row.appendChild(uAvatar(m, "av imav"));
       var tx = el("div", "itx"), top = el("div", "itop");
       top.appendChild(el("span", "inm", m.name || "User"));
       if (m.admin) top.appendChild(el("span", "iadm", "Admin"));
@@ -1459,6 +1496,11 @@
   function aboutRow(box, value, label) { var r = el("div", "iarow"); r.appendChild(el("div", "iav1", value)); r.appendChild(el("div", "ial", label)); box.appendChild(r); }
   function renderAbout(m) {
     var box = $("ci-about"); box.textContent = "";
+    if (info && m) info.member = m;
+    var pv = (m && m.pv) || (ch && ch.info.pv) || "", pc = pv && ch ? profGet(ch.info.seed) : null;
+    if (pv && ch && (!pc || pc.v !== String(pv))) profNeed(ch.info.seed, String(pv));
+    if (pc && pc.v === String(pv) && pc.b) { var br = el("div", "iarow"), bt = el("div", "iav1 idtx"); bt.appendChild(linkify(pc.b)); br.appendChild(bt); br.appendChild(el("div", "ial", "Bio")); box.appendChild(br); }
+    if (m && m.name && ch && info && info.kind === "user") $("ci-name").textContent = m.name;
     var uname = (m && m.username) || (ch && ch.info.username) || "";
     if (uname) aboutRow(box, "@" + uname, "Username");
     aboutRow(box, (m && m.uid) || (ch && ch.uid) || "", "User ID");
@@ -1671,7 +1713,7 @@
   $("ch-sup").onclick = function () { searchGo(srch.cur - 1); };      // older
   $("ch-sdown").onclick = function () { searchGo(srch.cur + 1); };    // newer
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && (screens[screens.length - 1] === "v-info" || screens[screens.length - 1] === "v-edit")) { goBack(); return; }
+    if (e.key === "Escape" && ["v-info", "v-edit", "v-pedit", "v-set", "v-spost"].indexOf(screens[screens.length - 1]) >= 0) { goBack(); return; }
     if (e.key !== "Escape" || screens[screens.length - 1] !== "v-chat") return;
     if (popOpen()) closePop(); else if (srch.on && document.activeElement !== $("ch-q")) closeSearch();
   });
@@ -1714,30 +1756,541 @@
   $("row-public").onclick = function () { openChat({ room: "public" }); };
   $("row-support").onclick = function () { if (getChat() && getChat().isAdmin) openThreads(); else openChat({ room: "support" }); };
 
-  // ---------- Profile ----------
+  // ---------- custom profiles (Edit Info): other users' photos / bios, cached on this device ----------
+  // Chat lists carry only `pv` (profile version) and the custom name; the photo is fetched once per user + version
+  // (/api/profile?u=) and kept in localStorage gc_prof:<u> (newest PROF_KEEP users). Never part of the 20 s poll.
+  var PPFX = "gc_prof:", PROF_KEEP = 30, profMem = {}, profWant = {}, profQ = [], profBusy = 0, avReg = {};
+  function profGet(u) {
+    if (!u) return null;
+    if (profMem[u]) return profMem[u];
+    try { var o = JSON.parse(localStorage.getItem(PPFX + u) || "null"); if (o && typeof o === "object" && o.v != null) { profMem[u] = o; return o; } } catch (e) {}
+    return null;
+  }
+  function profPut(u, p) {
+    if (!u) return;
+    var o = { v: String(p.v || ""), n: String(p.name || ""), b: String(p.bio || ""), p: photoOk(p.photo), t: Date.now() };
+    profMem[u] = o;
+    var put = function () { localStorage.setItem(PPFX + u, JSON.stringify(o)); };
+    try { put(); }
+    catch (e) {   // quota: drop the other cached profiles, then the chat caches' oldest half, then give up (memory only)
+      try { lsKeys().forEach(function (k) { if (k.indexOf(PPFX) === 0 && k !== PPFX + u) localStorage.removeItem(k); }); put(); } catch (e2) {}
+    }
+    var ks = lsKeys().filter(function (k) { return k.indexOf(PPFX) === 0; });
+    if (ks.length > PROF_KEEP) {
+      ks.map(function (k) { var t = 0; try { t = Number((JSON.parse(localStorage.getItem(k) || "{}") || {}).t) || 0; } catch (e) {} return { k: k, t: t }; })
+        .sort(function (a, b) { return a.t - b.t; }).slice(0, ks.length - PROF_KEEP)
+        .forEach(function (x) { if (x.k !== PPFX + u) { try { localStorage.removeItem(x.k); } catch (e) {} } });
+    }
+  }
+  function profNeed(u, v) {
+    if (!u || !v || !chatReady()) return;
+    var c = profGet(u);
+    if ((c && c.v === v) || profWant[u] === v) return;
+    profWant[u] = v; profQ.push(u); profPump();
+  }
+  function profPump() {
+    while (profBusy < 2 && profQ.length) {
+      (function (u) {
+        var want = profWant[u]; profBusy++;
+        chatApi("/api/profile?u=" + encodeURIComponent(u)).then(function (d) {
+          profBusy--;
+          if (d && d.ok) {
+            var p = d.profile;
+            profPut(u, p ? { v: p.v || want, name: p.name, bio: p.bio, photo: p.photo } : { v: want, photo: "" });
+            profApply(u);
+          }
+          profPump();
+        }).catch(function () { profBusy--; profPump(); });   // profWant keeps the version: no retry storm this session
+      })(profQ.shift());
+    }
+  }
+  // avatar for a user that may have a custom profile photo: o = {u, pv, photo (Telegram url), name}
+  function uAvatar(o, cls) {
+    o = o || {};
+    var pv = o.pv ? String(o.pv) : "", c = pv ? profGet(o.u) : null;
+    var a = avatar(c && c.v === pv && c.p ? c.p : o.photo, o.name, o.u, cls);
+    if (o.u && pv) {
+      var list = avReg[o.u] = (avReg[o.u] || []).slice(-40);
+      list.push({ a: a, name: o.name, photo: o.photo, pv: pv });
+      if (!c || c.v !== pv) profNeed(o.u, pv);
+    }
+    storyRing(a, o.u);
+    return a;
+  }
+  // a fetched profile arrived: update the avatars already on screen (+ the admin user-info Bio)
+  function profApply(u) {
+    var c = profGet(u);
+    (avReg[u] || []).forEach(function (r) { if (c && c.v === r.pv) setAvImg(r.a, c.p || r.photo, r.name); });
+    if (info && info.kind === "user" && ch && ch.info.seed === u) renderAbout(info.member || null);
+  }
+
+  // ---------- own profile (GET/POST /api/profile), cached as gc_myprof ----------
+  var MYKEY = "gc_myprof", myProf = null, myBusy = false, BIO_MAX = 70, FIRST_MAX = 64;
+  function getMyProf() {
+    var o = cacheOwner(); if (!o) return null;
+    if (myProf && myProf.o === o) return myProf;
+    try { var x = JSON.parse(localStorage.getItem(MYKEY) || "null"); if (x && x.o === o) { myProf = x; return x; } } catch (e) {}
+    return null;
+  }
+  function setMyProf(p) {
+    var o = cacheOwner(); if (!o || !p) return;
+    myProf = { o: o, t: Date.now(), first_name: String(p.first_name || ""), last_name: String(p.last_name || ""), bio: String(p.bio || ""),
+      photo: photoOk(p.photo), v: String(p.v || ""), u: String(p.u || ""), username: String(p.username || ""), tg_photo: String(p.tg_photo || ""), custom: !!p.custom };
+    try { localStorage.setItem(MYKEY, JSON.stringify(myProf)); }
+    catch (e) { try { localStorage.setItem(MYKEY, JSON.stringify(Object.assign({}, myProf, { photo: "" }))); } catch (e2) {} }
+    if (myProf.u && myProf.v) profPut(myProf.u, { v: myProf.v, name: myName(), bio: myProf.bio, photo: myProf.photo });
+  }
+  function loadMyProfile(force) {
+    if (!chatReady() || myBusy) return;
+    var m = getMyProf();
+    if (!force && m && Date.now() - (m.t || 0) < 60000) return;
+    myBusy = true;
+    var owner = cacheOwner();
+    chatApi("/api/profile").then(function (d) {
+      myBusy = false;
+      if (d._status === 401) { chatExpired(); return; }
+      if (!d.ok || !d.profile || cacheOwner() !== owner) return;
+      setMyProf(d.profile);
+      if (pe && pe.photo === undefined) peAvatar();   // Edit Info open: show the fresh photo / Remove Photo
+      if (current === "profile") renderProfile();
+    }).catch(function () { myBusy = false; });
+  }
+  function myName() {
+    var m = getMyProf(), u = anyUser() || {};
+    var n = m && m.first_name ? [m.first_name, m.last_name].filter(Boolean).join(" ") : [u.first_name, u.last_name].filter(Boolean).join(" ");
+    return n || (u.username ? "@" + u.username : "Telegram user");
+  }
+  function myPhoto() { var m = getMyProf(), u = anyUser() || {}; return (m && m.photo) || (m && m.tg_photo) || u.photo_url || ""; }
+  function myU() { var m = getMyProf(); return (m && m.u) || stories.me || ""; }
+
+  // ---------- Profile tab ----------
+  function pfMsg(text, kind) { var m = $("pf-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = text || ""; if (!text) m.classList.add("hide"); }
   function renderProfile() {
     var logged = inTg || getSession() || getChat();
     $("pf-login").classList.toggle("hide", !!logged);
     $("pf-body").classList.toggle("hide", !logged);
     if (!logged) { $("pf-login").textContent = ""; loginPanel($("pf-login"), { id: "login-pf", title: "Log in", hint: "Log in with your Telegram account to see your profile, your promoted groups, and to chat." }); return; }
-    var u = anyUser() || {}, c = getChat();
-    var name = [u.first_name, u.last_name].filter(Boolean).join(" ") || (u.username ? "@" + u.username : "Telegram user");
-    var old = $("pf-av"), av = avatar(u.photo_url, name, String(u.id || ""), "av pav"); av.id = "pf-av"; old.parentNode.replaceChild(av, old);
+    var u = anyUser() || {}, c = getChat(), m = getMyProf(), name = myName();
+    var old = $("pf-av"), av = avatar(myPhoto(), name, String(u.id || ""), "av pav"); av.id = "pf-av";
+    storyRing(av, myU());
+    old.parentNode.replaceChild(av, old);
     $("pf-name").textContent = name;
-    $("pf-user").textContent = u.username ? "@" + u.username : "";
     $("pf-admin").classList.toggle("hide", !(c && c.isAdmin));
+    // info card: Bio (links tappable) + Username, like Telegram (never a phone number)
+    var box = $("pf-about"); box.textContent = "";
+    var bio = m ? m.bio.trim() : "", uname = (m && m.username) || u.username || "";
+    if (bio) { var r = el("div", "iarow"), t = el("div", "iav1 idtx"); t.appendChild(linkify(bio)); r.appendChild(t); r.appendChild(el("div", "ial", "Bio")); box.appendChild(r); }
+    if (uname) aboutRow(box, "@" + uname, "Username");
+    box.classList.toggle("hide", !bio && !uname);
     var cl = $("pf-chatlogin"); cl.textContent = ""; cl.classList.add("hide");
-    if (!inTg && !c) { cl.classList.remove("hide"); loginPanel(cl, { id: "login-pfchat", title: "Turn on chat", hint: "Log in with Telegram once more to use Messages and Support." }); }
-    $("pf-logout").classList.toggle("hide", inTg);
+    if (!inTg && !c) { cl.classList.remove("hide"); loginPanel(cl, { id: "login-pfchat", title: "Turn on chat", hint: "Log in with Telegram once more to use Messages, Support, Edit Info and My Day." }); }
+    if (c && $("pf-msg").textContent === "Log in with Telegram below first.") pfMsg("");
     loadBalance();
     if (!mineLoaded) loadMine();
+    if (c) { loadMyProfile(false); loadStories(false); }
   }
+  function needChatHere() {
+    if (chatReady()) return true;
+    pfMsg(inTg ? (chatState === "fail" ? (chatFailMsg || "Chat is not available.") : "Connecting… try again in a moment.") : "Log in with Telegram below first.", "err");
+    return false;
+  }
+  $("pf-edit").onclick = function () { if (needChatHere()) openPEdit(); };
+  $("pf-settings").onclick = function () { openSettings(); };
+  $("pf-myday").onclick = function () { if (needChatHere()) pickStory(); };
+  $("pf-avb").onclick = function () {
+    var g = storyGroup(myU());
+    if (g) openViewer([g], 0); else if (chatReady()) openPEdit();
+  };
+
+  // ---------- Edit Info: photo (320x320 JPEG made on this device), first / last name, bio (70) ----------
+  var pe = null;   // {photo: undefined (unchanged) | "" (remove) | data url, busy}
+  function peMsg(text) { var m = $("pe-msg"); m.textContent = text || ""; m.classList.toggle("hide", !text); }
+  function peCustomPhoto() { var m = getMyProf(); return pe && pe.photo !== undefined ? pe.photo : (m ? m.photo : ""); }
+  function peAvatar() {
+    var u = anyUser() || {}, m = getMyProf(), cp = peCustomPhoto();
+    var shown = cp || (m && m.tg_photo) || u.photo_url || "";
+    swapAv("pe-av", avatar(shown, $("pe-first").value || myName(), String(u.id || ""), "av peav"));
+    $("pe-rmphoto").classList.toggle("hide", !cp);
+  }
+  function peCount() {
+    var n = BIO_MAX - $("pe-bio").value.length, c = $("pe-count");
+    c.textContent = String(n); c.classList.toggle("neg", n < 0);
+    var t = $("pe-bio"); t.style.height = "auto"; t.style.height = Math.min(Math.max(t.scrollHeight, 24), 140) + "px";
+  }
+  function peBusy(on) { if (pe) pe.busy = on; $("pe-save").disabled = on; $("pe-save").classList.toggle("busy", on); }
+  function openPEdit() {
+    if (!chatReady()) return;
+    var m = getMyProf(), u = anyUser() || {};
+    pe = { photo: undefined, busy: false };
+    $("pe-first").value = m && m.first_name ? m.first_name : (u.first_name || "");
+    $("pe-last").value = m && m.first_name ? m.last_name : (u.last_name || "");
+    $("pe-bio").value = m ? m.bio : "";
+    peMsg(""); peBusy(false); peAvatar(); peCount();
+    $("pe-body").scrollTop = 0;
+    openScreen("v-pedit");
+    loadMyProfile(true);   // fresh copy (another device may have changed it); fields stay as typed
+  }
+  function pePick() { if (!pe || pe.busy) return; var f = $("pe-file"); f.value = ""; f.click(); }
+  $("pe-avb").onclick = pePick;
+  $("pe-photo").onclick = pePick;
+  $("pe-rmphoto").onclick = function () { if (!pe || pe.busy) return; pe.photo = ""; peAvatar(); };
+  $("pe-file").addEventListener("change", function () {
+    var f = $("pe-file").files && $("pe-file").files[0];
+    if (!f || !pe) return;
+    if (f.type && !/^image\//i.test(f.type)) { peMsg("Choose a photo (image file)."); return; }
+    var my = pe; peMsg("");
+    resizePhoto(f).then(function (url) { if (pe === my) { pe.photo = url; peAvatar(); } },
+      function () { if (pe === my) peMsg("Couldn't read this photo. Try another one."); });
+  });
+  $("pe-bio").addEventListener("input", peCount);
+  $("pe-first").addEventListener("input", function () { if (pe && !peCustomPhoto()) peAvatar(); });
+  $("pe-first").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); try { $("pe-last").focus(); } catch (x) {} } });
+  $("pe-last").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); try { $("pe-bio").focus(); } catch (x) {} } });
+  function peSave() {
+    if (!pe || pe.busy) return;
+    var first = $("pe-first").value.replace(/\s+/g, " ").trim(), last = $("pe-last").value.replace(/\s+/g, " ").trim();
+    var bio = $("pe-bio").value.replace(/\r\n?/g, "\n").trim();
+    if (!first) { peMsg("Enter your first name."); try { $("pe-first").focus(); } catch (e) {} return; }
+    if (first.length > FIRST_MAX) { peMsg("First name is too long (max " + FIRST_MAX + " characters)."); return; }
+    if (last.length > FIRST_MAX) { peMsg("Last name is too long (max " + FIRST_MAX + " characters)."); return; }
+    if (bio.length > BIO_MAX) { peMsg("Bio is too long (max " + BIO_MAX + " characters)."); return; }
+    var body = { first_name: first, last_name: last, bio: bio };
+    if (pe.photo !== undefined) body.photo = pe.photo;
+    var my = pe; peBusy(true); peMsg("");
+    chatApi("/api/profile", { body: body }).then(function (d) {
+      if (pe !== my) return;
+      peBusy(false);
+      if (d._status === 401) { closeAllScreens(); chatExpired(); return; }
+      if (!d.ok || !d.profile) { peMsg(d.message || "Couldn't save. Please try again."); return; }
+      setMyProf(d.profile);
+      if (screens[screens.length - 1] === "v-pedit") goBack();
+      renderProfile();
+    }).catch(function () { if (pe === my) { peBusy(false); peMsg("Couldn't connect. Check your connection."); } });
+  }
+  $("pe-save").onclick = peSave;
+  $("pe-back").onclick = goBack;
+
+  // ---------- Settings ----------
+  function themeUi() {
+    var p = themePref();
+    Array.prototype.forEach.call($("set-theme").children, function (b) {
+      var on = b.getAttribute("data-theme") === p; b.classList.toggle("on", on); b.setAttribute("aria-checked", on ? "true" : "false");
+    });
+  }
+  function openSettings() {
+    themeUi();
+    $("set-stars-v").textContent = fmtStars(stars.bal || 0);
+    $("set-out").classList.toggle("hide", inTg || !(getSession() || getChat()));
+    openScreen("v-set");
+    if (loggedIn()) loadBalance().then(function () { $("set-stars-v").textContent = fmtStars(stars.bal || 0); });
+  }
+  Array.prototype.forEach.call($("set-theme").children, function (b) { b.onclick = function () { setTheme(b.getAttribute("data-theme")); themeUi(); }; });
+  $("set-back").onclick = goBack;
+  $("set-stars").onclick = function () { openStars(); };
+  $("set-help").onclick = function () { open(botLink("paysupport")); };
+  $("set-terms").onclick = function () { open(botLink("terms")); };
+  $("set-support").onclick = function () {
+    if (!chatReady()) { tab("msg"); return; }
+    closeAllScreens();
+    if (getChat().isAdmin) openThreads(); else openChat({ room: "support" });
+  };
+  $("set-logout").onclick = function () { logout(); };
+
+  // ---------- My Day (stories) ----------
+  // List (metadata only, no photos) from /api/stories, kept in memory + gc_stories on this device; each photo is
+  // fetched by id when viewed (memory cache). Seen story ids: gc_story_seen (this device) → grey ring.
+  var STKEY = "gc_stories", SEENSTKEY = "gc_story_seen", STORY_MS = 5000, STORIES_TTL = 60000, CAPTION_MAX = 200;
+  var stories = { list: [], me: "", at: 0, busy: false, missing: false }, storyImgs = {}, storyImgKeys = [];
+  function stLoadCache() {
+    try { var o = JSON.parse(localStorage.getItem(STKEY) || "null"); if (o && o.o === cacheOwner() && Array.isArray(o.d)) { stories.list = o.d; stories.me = String(o.me || ""); } } catch (e) {}
+  }
+  function activeStories() { var now = Date.now(); return stories.list.filter(function (s) { return s && Date.parse(s.exp) > now; }); }
+  function seenSet() { try { var a = JSON.parse(localStorage.getItem(SEENSTKEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function markSeen(id) {
+    var a = seenSet(); if (a.indexOf(id) >= 0) return;
+    a.push(id); if (a.length > 400) a = a.slice(-400);
+    try { localStorage.setItem(SEENSTKEY, JSON.stringify(a)); } catch (e) {}
+  }
+  // groups by user (newest user first), each group's stories oldest → newest (viewing order)
+  function storyGroups() {
+    var by = {}, order = [];
+    activeStories().forEach(function (s) { if (!by[s.u]) { by[s.u] = { u: s.u, name: s.name, photo: s.photo, pv: s.pv, mine: s.mine, items: [] }; order.push(s.u); } by[s.u].items.push(s); });
+    return order.map(function (u) { var g = by[u]; g.items.sort(function (a, b) { return Date.parse(a.at) - Date.parse(b.at) || a.id - b.id; }); return g; });
+  }
+  function storyGroup(u) { if (!u) return null; var gs = storyGroups(); for (var i = 0; i < gs.length; i++) if (gs[i].u === u) return gs[i]; return null; }
+  function groupSeen(g) { var s = seenSet(); return g.items.every(function (x) { return s.indexOf(x.id) >= 0; }); }
+  // green ring (grey when every story was seen) on an avatar of a user with active stories
+  function storyRing(a, u) {
+    var g = storyGroup(u);
+    a.classList.toggle("ring", !!g); a.classList.toggle("seen", !!g && groupSeen(g));
+    return !!g;
+  }
+  function loadStories(force) {
+    if (!chatReady()) return Promise.resolve(false);
+    if (!stories.list.length && !stories.at) stLoadCache();
+    if (stories.busy || (!force && Date.now() - stories.at < STORIES_TTL)) { storiesChanged(); return Promise.resolve(false); }
+    stories.busy = true;
+    var owner = cacheOwner();
+    return chatApi("/api/stories").then(function (d) {
+      stories.busy = false;
+      if (d._status === 401) { chatExpired(); return false; }
+      if (!d.ok || cacheOwner() !== owner) return false;
+      stories.list = (Array.isArray(d.stories) ? d.stories : []).filter(function (s) { return s && Number(s.id) > 0 && s.u; });
+      stories.me = String(d.me || ""); stories.at = Date.now(); stories.missing = !!d.needSql;
+      try { localStorage.setItem(STKEY, JSON.stringify({ o: owner, me: stories.me, d: stories.list })); } catch (e) {}
+      storiesChanged();
+      return true;
+    }).catch(function () { stories.busy = false; return false; });
+  }
+  function storiesChanged() {
+    renderDays();
+    if (current === "profile" && !$("pf-body").classList.contains("hide")) storyRing($("pf-av"), myU());
+    if (ch && screens[screens.length - 1] === "v-chat" && ch.loaded) { var l = $("ch-list"), st = l.scrollTop; renderMsgs(); l.scrollTop = st; }
+  }
+  // the strip at the top of the Messages tab: Add (own photo + green plus), then people with active stories
+  function renderDays() {
+    var box = $("days"); box.textContent = "";
+    var on = current === "msg" && chatReady() && !sq.msg.trim();
+    box.classList.toggle("hide", !on);
+    if (!on) return;
+    var u = anyUser() || {};
+    var add = el("button", "day1 dayadd"); add.type = "button"; add.setAttribute("role", "listitem"); add.setAttribute("aria-label", "Add to My Day");
+    var w = el("span", "dayw"); w.appendChild(avatar(myPhoto(), myName(), String(u.id || ""), "av")); w.appendChild(el("span", "dayplus", "+"));
+    add.appendChild(w); add.appendChild(el("span", "dayn", "Add"));
+    add.onclick = function () { pickStory(); };
+    box.appendChild(add);
+    var gs = storyGroups(), me = myU();
+    gs.sort(function (a, b) { return (a.u === me ? -1 : 0) - (b.u === me ? -1 : 0); });   // own My Day first, then newest
+    gs.forEach(function (g, i) {
+      var b = el("button", "day1" + (groupSeen(g) ? " seen" : "")); b.type = "button"; b.setAttribute("role", "listitem");
+      var own = g.u === me || g.mine;
+      var a = own ? avatar(myPhoto(), myName(), String(u.id || ""), "av") : uAvatar({ u: g.u, pv: g.pv, photo: g.photo, name: g.name }, "av");
+      storyRing(a, g.u);
+      var w2 = el("span", "dayw"); w2.appendChild(a); b.appendChild(w2);
+      var label = g.u === me || g.mine ? "My Day" : String(g.name || "User").split(" ")[0];
+      b.appendChild(el("span", "dayn", label));
+      b.setAttribute("aria-label", (g.u === me || g.mine ? "My Day" : g.name) + ", " + g.items.length + (g.items.length === 1 ? " story" : " stories"));
+      b.onclick = function () { openViewer(gs, i); };
+      box.appendChild(b);
+    });
+  }
+  // ----- post: pick a photo → preview with caption → Share -----
+  var sp = null;   // {photo, busy}
+  var STORY_SIDE = 1080, STORY_SOFT = 190000, STORY_HARD = 204000;   // data-url chars: ~140 KB target, < 150 KB hard
+  function storyJpeg(img) {
+    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    if (!w || !h) throw new Error("empty image");
+    var scale = Math.min(1, STORY_SIDE / Math.max(w, h)), url = "";
+    for (var round = 0; round < 6; round++) {
+      var cw = Math.max(1, Math.round(w * scale)), chh = Math.max(1, Math.round(h * scale));
+      var c = document.createElement("canvas"); c.width = cw; c.height = chh;
+      var g = c.getContext("2d"); g.fillStyle = "#000000"; g.fillRect(0, 0, cw, chh);
+      try { g.imageSmoothingQuality = "high"; } catch (e) {}
+      g.drawImage(img, 0, 0, w, h, 0, 0, cw, chh);
+      var q = 0.82; url = c.toDataURL("image/jpeg", q);
+      while (url.length > STORY_SOFT && q > 0.5) { q = Math.round((q - 0.08) * 100) / 100; url = c.toDataURL("image/jpeg", q); }
+      if (url.length <= STORY_SOFT) break;
+      scale *= 0.8;
+    }
+    if (!/^data:image\/jpeg;base64,/.test(url) || url.length > STORY_HARD) throw new Error("jpeg");
+    return url;
+  }
+  function spMsg(text) { var m = $("sp-msg"); m.textContent = text || ""; m.classList.toggle("hide", !text); }
+  function pickStory() {
+    if (!chatReady()) { if (current === "profile") needChatHere(); else tab("msg"); return; }
+    var f = $("sp-file"); f.value = ""; f.click();
+  }
+  $("sp-file").addEventListener("change", function () {
+    var f = $("sp-file").files && $("sp-file").files[0];
+    if (!f) return;
+    if (f.type && !/^image\//i.test(f.type)) { (current === "profile" ? pfMsg : chatsMsg)("Choose a photo (image file).", "err"); return; }
+    loadImage(f).then(storyJpeg).then(function (url) { openStoryPost(url); },
+      function () { (current === "profile" ? pfMsg : chatsMsg)("Couldn't read this photo. Try another one.", "err"); });
+  });
+  function chatsMsg(text, kind) { var m = $("chats-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = text || ""; if (!text) m.classList.add("hide"); }
+  function openStoryPost(url) {
+    sp = { photo: url, busy: false };
+    $("sp-img").src = url; $("sp-cap").value = ""; spCount(); spMsg("");
+    $("sp-share").disabled = false; $("sp-share").textContent = "Share";
+    openScreen("v-spost");
+  }
+  function spCount() {
+    var t = $("sp-cap"), n = CAPTION_MAX - t.value.length; $("sp-count").textContent = String(n);
+    t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 110) + "px";
+  }
+  $("sp-cap").addEventListener("input", spCount);
+  $("sp-close").onclick = goBack;
+  function shareStory() {
+    if (!sp || sp.busy) return;
+    var cap = $("sp-cap").value.replace(/\r\n?/g, "\n").trim();
+    if (cap.length > CAPTION_MAX) { spMsg("Caption is too long (max " + CAPTION_MAX + " characters)."); return; }
+    var my = sp; sp.busy = true; $("sp-share").disabled = true; $("sp-share").textContent = "Sharing…"; spMsg("");
+    chatApi("/api/stories", { body: { action: "post", photo: sp.photo, caption: cap } }).then(function (d) {
+      if (sp !== my) return;
+      sp.busy = false; $("sp-share").disabled = false; $("sp-share").textContent = "Share";
+      if (d._status === 401) { closeAllScreens(); chatExpired(); return; }
+      if (!d.ok || !d.story) { spMsg(d.message || "Couldn't share. Please try again."); return; }
+      var s = d.story; if (s.id) { storyImgPut(s.id, my.photo); markSeen(s.id); }
+      stories.list = [s].concat(stories.list.filter(function (x) { return x.id !== s.id; }));
+      if (s.u) stories.me = s.u;
+      if (screens[screens.length - 1] === "v-spost") goBack();
+      storiesChanged();
+      if (current === "profile") pfMsg("✅ Shared to My Day. It stays for 24 hours.", "okm");
+      loadStories(true);
+    }).catch(function () { if (sp === my) { sp.busy = false; $("sp-share").disabled = false; $("sp-share").textContent = "Share"; spMsg("Couldn't connect. Check your connection."); } });
+  }
+  $("sp-share").onclick = shareStory;
+  function storyImgPut(id, url) {
+    storyImgs[id] = url; storyImgKeys = storyImgKeys.filter(function (k) { return k !== id; }); storyImgKeys.push(id);
+    while (storyImgKeys.length > 20) delete storyImgs[storyImgKeys.shift()];
+  }
+  var imgWant = {};
+  function storyImg(id) {
+    if (storyImgs[id]) return Promise.resolve(storyImgs[id]);
+    if (imgWant[id]) return imgWant[id];
+    imgWant[id] = chatApi("/api/stories?id=" + encodeURIComponent(id)).then(function (d) {
+      delete imgWant[id];
+      if (d && d.ok && d.story && photoOk(d.story.image)) { storyImgPut(id, d.story.image); return d.story.image; }
+      if (d && d._status === 404) return null;
+      throw new Error("load");
+    }, function (e) { delete imgWant[id]; throw e; });
+    return imgWant[id];
+  }
+  // ----- viewer -----
+  var sv = null;   // {groups, gi, si, timer, startAt, remain, paused, gen}
+  function timeAgo(iso) {
+    var t = Date.parse(iso); if (!isFinite(t)) return "";
+    var m = Math.floor((Date.now() - t) / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return m + (m === 1 ? " minute ago" : " minutes ago");
+    var h = Math.floor(m / 60); return h + (h === 1 ? " hour ago" : " hours ago");
+  }
+  function openViewer(groups, gi) {
+    groups = (groups || []).filter(function (g) { return g && g.items && g.items.length; });
+    if (!groups.length) return;
+    gi = Math.max(0, Math.min(groups.length - 1, gi || 0));
+    var seen = seenSet(), g = groups[gi], si = 0;
+    for (var i = 0; i < g.items.length; i++) if (seen.indexOf(g.items[i].id) < 0) { si = i; break; }
+    sv = { groups: groups, gi: gi, si: si, timer: null, startAt: 0, remain: STORY_MS, paused: false, gen: 0 };
+    openScreen("v-sview");
+    svShow();
+  }
+  function svCur() { return sv ? sv.groups[sv.gi].items[sv.si] : null; }
+  function svStop() { if (sv && sv.timer) { clearTimeout(sv.timer); sv.timer = null; } }
+  function svShow() {
+    if (!sv) return;
+    svStop();
+    var g = sv.groups[sv.gi], s = g.items[sv.si], gen = ++sv.gen;
+    var bars = $("sv-bars"); bars.textContent = "";
+    g.items.forEach(function (x, i) { var b = el("span", "svbar" + (i < sv.si ? " done" : "")); b.appendChild(el("i")); bars.appendChild(b); });
+    var me0 = anyUser() || {};
+    swapAv("sv-av", g.mine ? avatar(myPhoto(), myName(), String(me0.id || ""), "av svav") : uAvatar({ u: g.u, pv: g.pv, photo: g.photo, name: g.name }, "av svav"));
+    $("sv-av").classList.remove("ring", "seen");
+    $("sv-name").textContent = g.mine ? "My Day" : (g.name || "User");
+    $("sv-time").textContent = timeAgo(s.at);
+    $("sv-del").classList.toggle("hide", !(s.mine || isAdminNow()));
+    var cap = $("sv-cap"); cap.textContent = ""; cap.classList.toggle("hide", !s.caption);
+    if (s.caption) cap.appendChild(linkify(String(s.caption)));
+    $("sv-gone").classList.add("hide");
+    var img = $("sv-img"); img.removeAttribute && img.removeAttribute("src"); img.classList.add("hide");
+    $("sv-load").classList.remove("hide");
+    markSeen(s.id);
+    storyImg(s.id).then(function (url) {
+      if (!sv || sv.gen !== gen) return;
+      $("sv-load").classList.add("hide");
+      if (!url) { $("sv-gone").classList.remove("hide"); svStart(1500); return; }
+      img.src = url; img.classList.remove("hide");
+      svStart(STORY_MS);
+      var nx = g.items[sv.si + 1] || (sv.groups[sv.gi + 1] && sv.groups[sv.gi + 1].items[0]);
+      if (nx) storyImg(nx.id).catch(function () {});              // preload the next one
+    }, function () {
+      if (!sv || sv.gen !== gen) return;
+      $("sv-load").classList.add("hide"); $("sv-gone").textContent = "Couldn't load this story."; $("sv-gone").classList.remove("hide");
+      svStart(2500);
+    });
+  }
+  function svStart(ms) {
+    if (!sv) return;
+    var bar = $("sv-bars").children[sv.si];
+    if (bar) { bar.classList.add("cur"); bar.classList.remove("paused"); var i = bar.children[0]; if (i) i.style.animationDuration = ms + "ms"; }
+    sv.remain = ms; sv.startAt = Date.now(); sv.paused = false;
+    sv.timer = setTimeout(svNext, ms);
+  }
+  function svPause(on) {
+    if (!sv || !sv.timer && !sv.paused) return;
+    var bar = $("sv-bars").children[sv.si];
+    if (on && !sv.paused) { svStop(); sv.remain = Math.max(200, sv.remain - (Date.now() - sv.startAt)); sv.paused = true; if (bar) bar.classList.add("paused"); }
+    else if (!on && sv.paused) { sv.paused = false; if (bar) bar.classList.remove("paused"); sv.startAt = Date.now(); sv.timer = setTimeout(svNext, sv.remain); }
+  }
+  function svNext() {
+    if (!sv) return;
+    var g = sv.groups[sv.gi];
+    if (sv.si < g.items.length - 1) { sv.si++; svShow(); return; }
+    if (sv.gi < sv.groups.length - 1) { sv.gi++; sv.si = 0; svShow(); return; }
+    svClose();
+  }
+  function svPrev() {
+    if (!sv) return;
+    if (sv.si > 0) { sv.si--; svShow(); return; }
+    if (sv.gi > 0) { sv.gi--; sv.si = sv.groups[sv.gi].items.length - 1; svShow(); return; }
+    svShow();   // first story: start it again
+  }
+  function svClose() { if (screens.indexOf("v-sview") >= 0) closeScreen("v-sview"); storiesChanged(); }
+  $("sv-next").onclick = function () { svNext(); };
+  $("sv-prev").onclick = function () { svPrev(); };
+  $("sv-close").onclick = function () { svClose(); };
+  // hold to pause, swipe down to close (touch)
+  (function () {
+    var y0 = null, x0 = null, t0 = 0, stage = $("v-sview");
+    stage.addEventListener("touchstart", function (e) { var t = e.touches && e.touches[0]; if (!t) return; y0 = t.clientY; x0 = t.clientX; t0 = Date.now(); svPause(true); }, { passive: true });
+    stage.addEventListener("touchend", function (e) {
+      var t = e.changedTouches && e.changedTouches[0], dy = t && y0 != null ? t.clientY - y0 : 0, dx = t && x0 != null ? t.clientX - x0 : 0;
+      y0 = null;
+      if (dy > 80 && Math.abs(dy) > Math.abs(dx)) { if (e.preventDefault) e.preventDefault(); svClose(); return; }
+      svPause(false);
+    });
+    stage.addEventListener("touchcancel", function () { y0 = null; svPause(false); });
+  })();
+  function askConfirm(text, cb) {
+    try { if (inTg && tg.showConfirm) { tg.showConfirm(text, function (ok) { cb(!!ok); }); return; } } catch (e) {}
+    try { if (typeof window.confirm === "function") { cb(!!window.confirm(text)); return; } } catch (e) {}
+    cb(true);
+  }
+  $("sv-del").onclick = function () {
+    var s = svCur(); if (!s) return;
+    svPause(true);
+    askConfirm("Delete this story?", function (yes) {
+      if (!yes) { svPause(false); return; }
+      chatApi("/api/stories", { body: { action: "delete", id: s.id } }).then(function (d) {
+        if (d._status === 401) { closeAllScreens(); chatExpired(); return; }
+        if (!d.ok && d._status !== 404) { svPause(false); $("sv-gone").textContent = d.message || "Couldn't delete the story."; $("sv-gone").classList.remove("hide"); return; }
+        stories.list = stories.list.filter(function (x) { return x.id !== s.id; });
+        delete storyImgs[s.id];
+        try { localStorage.setItem(STKEY, JSON.stringify({ o: cacheOwner(), me: stories.me, d: stories.list })); } catch (e) {}
+        if (!sv) { storiesChanged(); return; }
+        var g = sv.groups[sv.gi];
+        g.items = g.items.filter(function (x) { return x.id !== s.id; });
+        if (!g.items.length) { sv.groups.splice(sv.gi, 1); sv.si = 0; if (sv.gi >= sv.groups.length) { svClose(); return; } }
+        else if (sv.si >= g.items.length) sv.si = g.items.length - 1;
+        svShow(); storiesChanged();
+      }).catch(function () { svPause(false); });
+    });
+  };
+  document.addEventListener("keydown", function (e) {
+    if (screens[screens.length - 1] !== "v-sview") return;
+    if (e.key === "ArrowRight") svNext(); else if (e.key === "ArrowLeft") svPrev(); else if (e.key === "Escape") svClose();
+  });
+  window.gcTest = window.gcTest || {};
+  window.gcTest.storyJpeg = storyJpeg; window.gcTest.timeAgo = timeAgo; window.gcTest.openStoryPost = openStoryPost;   // tests / debugging
+  window.gcTest.storiesStale = function () { stories.at = 0; };
+
   function logout() {
     clearMsgCache(""); setSession(null); setChat(null); mineLoaded = false; lastSum = null; unread = { at: "", n: 0 };
+    myProf = null; stories.list = []; stories.me = ""; stories.at = 0; profMem = {}; avReg = {}; pfMsg("");
+    lsKeys().forEach(function (k) { if (k === MYKEY || k === STKEY || k === SEENSTKEY || k.indexOf(PPFX) === 0) { try { localStorage.removeItem(k); } catch (e) {} } });
     if (!inTg) setBal(null);
     closeAllScreens(); renderAccount(); showPromote(); refreshTab();
   }
-  $("pf-logout").onclick = logout;
   function refreshTab() {
     if (current === "msg" && !screens.length) renderMsgTab();
     else if (current === "profile") renderProfile();
@@ -1749,6 +2302,7 @@
     if (["groups", "msg", "profile"].indexOf(name) < 0) name = "groups";
     closeSheet(); closeAllScreens();
     current = name;
+    document.body.classList.toggle("onprof", name === "profile");
     ["groups", "msg", "profile"].forEach(function (t) { $("v-" + t).classList.toggle("hide", t !== name); });
     Array.prototype.forEach.call(document.querySelectorAll(".nav button"), function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === name); });
     searchBar();
@@ -1770,7 +2324,7 @@
     if (current !== "groups" && current !== "msg") return;
     sq[current] = $("q").value;
     $("q-x").classList.toggle("hide", !sq[current]);
-    if (current === "msg") filterChats(); else render();
+    if (current === "msg") { filterChats(); renderDays(); } else render();
   }
   Array.prototype.forEach.call(document.querySelectorAll(".nav button"), function (b) { b.onclick = function () { tab(b.getAttribute("data-tab")); }; });
   $("q").addEventListener("input", searchInput);

@@ -1,6 +1,7 @@
 /* Group City website — Telegram (Android) look.
    Light by default (Telegram green accent); html.dark = dark look (device setting, or Telegram's colorScheme).
-   Inside Telegram (html.tg) the colours follow Telegram.WebApp themeParams. No external fonts/images. */
+   Inside Telegram (html.tg) the colours follow Telegram.WebApp themeParams, unless the user picked Light / Dark in
+   Settings (html.thx: then the site's own light / dark colours are used). No external fonts/images. */
 :root{
   --bg:#ffffff;--card:#ffffff;--sec:#f1f2f6;--text:#000000;--hint:#8d8e93;--sep:rgba(0,0,0,.09);--soft:rgba(116,120,128,.12);
   --btn:#2aa05a;--btnt:#ffffff;--accent:#2aa05a;--link:#2aa05a;
@@ -17,7 +18,7 @@ html.dark{
   --wall1:#0e1621;--wall2:#122030;--wall3:#0f1a24;--wallink:rgba(255,255,255,.05);--floatbg:#1c2a38;
   --sbar:#242f3d;
 }
-html.tg{
+html.tg:not(.thx){
   --bg:var(--tg-theme-bg-color,#fff);--card:var(--tg-theme-header-bg-color,var(--tg-theme-bg-color,#fff));
   --sec:var(--tg-theme-secondary-bg-color,#f1f2f6);--text:var(--tg-theme-text-color,#000);--hint:var(--tg-theme-hint-color,#8d8e93);
   --btn:var(--tg-theme-button-color,#2aa05a);--btnt:var(--tg-theme-button-text-color,#fff);
@@ -30,7 +31,7 @@ html.tg{
   --btimeout:color-mix(in srgb,var(--btn) 70%,var(--text));
   --sbar:#f0f2f4;--sbar:color-mix(in srgb,var(--text) 6%,var(--bg));
 }
-html.tg.dark{--bout:#2b5a3d;--bout:color-mix(in srgb,var(--btn) 35%,var(--bin));--sbar:#242f3d;--sbar:color-mix(in srgb,var(--text) 9%,var(--bg))}
+html.tg.dark:not(.thx){--bout:#2b5a3d;--bout:color-mix(in srgb,var(--btn) 35%,var(--bin));--sbar:#242f3d;--sbar:color-mix(in srgb,var(--text) 9%,var(--bg))}
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{background:var(--bg);color:var(--text);font-family:Roboto,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -277,11 +278,9 @@ html.dark .mrow.me .mlink{color:#9fe0b0}
 .mm-b.red{color:#e5534b}
 
 /* ---------- Profile ---------- */
-.pcard{display:flex;flex-direction:column;align-items:center;padding:20px 16px 14px;text-align:center}
 .pav{width:92px;height:92px;font-size:36px;overflow:hidden}
 .pav img{width:100%;height:100%;object-fit:cover}
 .pname{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:21px;font-weight:700;max-width:100%;word-break:break-word;justify-content:center}
-.puser{font-size:14px;color:var(--accent);margin-top:3px}
 .chip-admin{font-size:11px;font-weight:700;background:#f5b72f;color:#1b1b1b;border-radius:8px;padding:2px 8px;flex:none}
 .ghost.wide{display:block;width:calc(100% - 32px);margin:18px 16px 8px;color:#e5534b}
 .thw{color:var(--accent);font-weight:600}
@@ -308,12 +307,12 @@ html.dark .emopanel{border-top-color:rgba(255,255,255,.08)}
 .cbadge{border-radius:12px;font-variant-numeric:tabular-nums}
 .cbadge.unm{background:#2aa05a;color:#fff}
 html.dark .cbadge.unm{background:#4fb26b}
-html.tg .cbadge.unm{background:var(--btn);color:var(--btnt)}
+html.tg:not(.thx) .cbadge.unm{background:var(--btn);color:var(--btnt)}
 .cbadge.muted{background:#c4c9cc;color:#fff}
 html.dark .cbadge.muted{background:#3e4a56;color:#c9d2db}
 .ctime.unread{color:#2aa05a;font-weight:500}
 html.dark .ctime.unread{color:#5ec27a}
-html.tg .ctime.unread{color:var(--btn)}
+html.tg:not(.thx) .ctime.unread{color:var(--btn)}
 /* ⋮ : its own floating circle on the right of the header, same as the back circle */
 .cmore{flex:none;width:46px;height:46px;border-radius:50%;border:0;background:var(--floatbg);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.14)}
 .cmore:active,.cmore.on{background:color-mix(in srgb,var(--floatbg) 86%,var(--text))}
@@ -487,3 +486,116 @@ html.dark .spi .spd{color:#f5b72f}
 .pfs-l{flex:1;min-width:0}
 .pfs-v{font-weight:600;font-variant-numeric:tabular-nums}
 .pfstars .chev{width:18px;height:18px;fill:none;stroke:var(--hint);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- v13: Profile tab (Telegram profile), Edit Info, Settings, My Day ---------- */
+body.onprof,body.onprof .apphead{background:var(--sec)}
+#v-profile{padding:0 12px 8px}
+.pfhero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px 24px 16px}
+.pfavb{padding:0;border:0;background:none;border-radius:50%;cursor:pointer;line-height:0}
+.pav{width:108px;height:108px;font-size:44px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+.pname{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:24px;font-weight:600;letter-spacing:-.2px;max-width:100%;overflow-wrap:anywhere;justify-content:center;line-height:1.2}
+.chip-admin{font-size:12px;font-weight:700;background:#f5b72f;color:#1b1b1b;border-radius:8px;padding:2px 8px;flex:none;letter-spacing:0}
+.pfacts{margin:0 0 12px}
+.pfacts .iact{padding:13px 4px 11px;font-size:14px}
+.pfabout{margin-bottom:12px}
+.pfabout .iarow{padding:11px 18px}
+#v-profile .pfstars{width:100%;margin:0 0 4px;background:var(--card);border-radius:18px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+#v-profile .sec{padding:16px 6px 6px}
+#v-profile #mine{background:var(--card);border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+#v-profile #mine .empty{padding:28px 20px}
+#v-profile #mine>.big{margin:12px auto 14px}
+#v-profile #mine>.note{margin:0 16px 14px}
+#v-profile .msg{margin:0 0 12px}
+#v-profile .panel{margin:12px 0}
+/* green "has My Day" ring (seen = grey), Telegram-style gap between ring and photo */
+.av.ring{box-shadow:0 0 0 2px var(--ringgap,var(--bg)),0 0 0 4.5px #34c759}
+.av.ring.seen{box-shadow:0 0 0 2px var(--ringgap,var(--bg)),0 0 0 4px #b8bec4}
+html.dark .av.ring.seen{box-shadow:0 0 0 2px var(--ringgap,var(--bg)),0 0 0 4px #4b5866}
+.pav.ring{--ringgap:var(--sec);box-shadow:0 0 0 3px var(--sec),0 0 0 6px #34c759}
+.pav.ring.seen{box-shadow:0 0 0 3px var(--sec),0 0 0 6px #b8bec4}
+.mav.ring{--ringgap:var(--bin);cursor:pointer}
+.iav.ring,.imav.ring{--ringgap:var(--sec)}
+/* Edit Info */
+.pehero{display:flex;justify-content:center;padding:6px 0 18px}
+.peavb{position:relative;padding:0;border:0;background:none;border-radius:50%;cursor:pointer;line-height:0}
+.peav{width:108px;height:108px;font-size:44px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+.pecam{position:absolute;right:-2px;bottom:-2px;width:38px;height:38px;border-radius:50%;background:#2aa05a;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px var(--sec)}
+html.dark .pecam{background:#4fb26b}
+.pecam svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pecard{margin-bottom:12px}
+.ephoto.red{color:#e5534b}
+.pelabel{padding:16px 18px 2px;font-size:15px;font-weight:600;color:var(--accent)}
+.pein{display:block;width:100%;height:54px;border:0;outline:0;background:none;color:var(--text);font:inherit;font-size:17px;padding:0 18px;-webkit-appearance:none;appearance:none}
+.pein::placeholder{color:var(--hint);opacity:1}
+.pebio{display:flex;align-items:flex-end;gap:8px;padding:0 16px 0 0}
+#pe-bio{flex:1;min-width:0;display:block;min-height:24px;max-height:140px;resize:none;border:0;outline:0;background:none;color:var(--text);font:inherit;font-size:17px;line-height:1.4;padding:16px 0 16px 18px;overflow-y:auto}
+#pe-bio::placeholder{color:var(--hint);opacity:1}
+.pecount{flex:none;padding-bottom:17px;font-size:15px;color:var(--hint);font-variant-numeric:tabular-nums}
+.pecount.neg{color:#e5534b;font-weight:600}
+.pehelp{margin:-4px 18px 12px;font-size:14px;color:var(--hint)}
+/* Settings */
+.ehsp{flex:none;width:46px}
+.sethd{padding:6px 18px 8px;font-size:15px;font-weight:600;color:var(--accent)}
+.setcard{margin-bottom:14px}
+.seg{display:flex;gap:4px;padding:5px;margin:0}
+.seg button{flex:1;border:0;border-radius:14px;background:none;color:var(--text);font:inherit;font-size:15px;font-weight:500;padding:11px 6px;cursor:pointer}
+.seg button.on{background:var(--pillbg);color:var(--accent);font-weight:600}
+.setrow{display:flex;align-items:center;gap:22px;width:100%;min-height:56px;padding:0 16px 0 20px;border:0;background:none;color:var(--text);font:inherit;font-size:16px;text-align:left;cursor:pointer;position:relative}
+.setrow+.setrow:before{content:"";position:absolute;top:0;left:66px;right:0;height:1px;background:var(--sep)}
+.setrow:active{background:var(--soft)}
+@media (hover:hover){.setrow:hover{background:var(--soft)}}
+.setrow>svg{width:24px;height:24px;flex:none;fill:none;stroke:var(--hint);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.setrow>svg .dot{fill:var(--hint);stroke:none}
+.setrow>svg.stico{stroke:none}
+.setrow>svg.chev{width:18px;height:18px;margin-left:-14px}
+.setl{flex:1;min-width:0}
+.setv{font-weight:600;font-variant-numeric:tabular-nums;color:var(--hint)}
+.setrow.red,.setrow.red>svg{color:#e5534b;stroke:#e5534b}
+/* My Day strip (Messages tab) */
+.days{display:flex;gap:4px;padding:6px 8px 8px;overflow-x:auto;scrollbar-width:none;background:var(--card);border-bottom:1px solid var(--sep)}
+.days::-webkit-scrollbar{display:none}
+.day1{flex:none;width:74px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 0 2px;border:0;background:none;color:var(--text);font:inherit;cursor:pointer;border-radius:14px}
+.day1:active{background:var(--soft)}
+.day1 .av{width:58px;height:58px;font-size:23px;overflow:hidden;margin:4px}
+.day1 .av.ring{--ringgap:var(--card)}
+.dayw{position:relative;line-height:0}
+.dayplus{position:absolute;right:0;bottom:0;width:22px;height:22px;border-radius:50%;background:#2aa05a;color:#fff;font-size:18px;font-weight:600;line-height:20px;text-align:center;box-shadow:0 0 0 2.5px var(--card)}
+.dayn{max-width:70px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.day1.seen .dayn{color:var(--hint)}
+/* My Day screens (dark, full screen) */
+html .screen.story,html.dark .screen.story{background:#000;background-image:none;color:#fff;z-index:18}
+.sthead2{display:flex;align-items:center;gap:10px;padding:10px;padding-top:calc(10px + env(safe-area-inset-top));flex:none}
+.sptitle{font-size:18px;font-weight:600}
+.sbtn{flex:none;width:44px;height:44px;border:0;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.sbtn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.spimg{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 8px}
+.spimg img,.svstage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;display:block}
+.spfoot{flex:none;display:flex;align-items:flex-end;gap:8px;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
+.spcap{flex:1;min-width:0;display:flex;align-items:flex-end;gap:6px;background:rgba(255,255,255,.12);border-radius:24px;padding:0 14px 0 16px;min-height:48px}
+#sp-cap{flex:1;min-width:0;resize:none;border:0;outline:0;background:none;color:#fff;font:inherit;font-size:16px;line-height:21px;padding:13px 0;max-height:110px}
+#sp-cap::placeholder{color:rgba(255,255,255,.6)}
+.spcount{flex:none;padding-bottom:14px;font-size:13px;color:rgba(255,255,255,.6);font-variant-numeric:tabular-nums}
+.spshare{flex:none;height:48px;padding:0 22px;border:0;border-radius:24px;background:#2aa05a;color:#fff;font:inherit;font-size:16px;font-weight:600;cursor:pointer}
+.spshare:disabled{opacity:.55}
+.story .msg.err{margin:8px 10px 0;background:rgba(229,83,75,.85);color:#fff}
+.svbars{display:flex;gap:4px;padding:8px 10px 0;padding-top:calc(8px + env(safe-area-inset-top));flex:none}
+.svbar{flex:1;height:2.5px;border-radius:2px;background:rgba(255,255,255,.35);overflow:hidden}
+.svbar i{display:block;height:100%;width:0;background:#fff}
+.svbar.done i{width:100%}
+.svbar.cur i{animation:svfill 5s linear forwards}
+.svbar.cur.paused i{animation-play-state:paused}
+@keyframes svfill{from{width:0}to{width:100%}}
+.svhead{display:flex;align-items:center;gap:10px;padding:10px 10px 6px;flex:none}
+.svav{width:40px;height:40px;font-size:16px;overflow:hidden;flex:none}
+.svwho{flex:1;min-width:0}
+.svname{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.svtime{font-size:13px;color:rgba(255,255,255,.7);margin-top:1px}
+.svstage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 4px;touch-action:none;user-select:none;-webkit-user-select:none}
+.svtap{position:absolute;top:0;bottom:0;border:0;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.svtap.l{left:0;width:33%}.svtap.r{right:0;width:67%}
+.svload{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.svload .spin{width:34px;height:34px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+.svgone{position:absolute;left:24px;right:24px;top:45%;text-align:center;font-size:15px;color:rgba(255,255,255,.8)}
+.svcap{flex:none;margin:8px 12px calc(14px + env(safe-area-inset-bottom));padding:10px 14px;border-radius:16px;background:rgba(0,0,0,.45);font-size:15.5px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;max-height:30vh;overflow:auto}
+.svcap .mlink{color:#8fd3ff}
+@media (prefers-reduced-motion:reduce){.svload .spin{animation:none}}
