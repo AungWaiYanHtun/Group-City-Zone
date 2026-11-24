@@ -38,7 +38,8 @@ function query(req) {
   try { return Object.fromEntries(new URL(req.url, "http://x").searchParams); } catch (e) { return {}; }
 }
 
-async function body(req) {
+async function body(req, max) {
+  max = max || 20000;
   if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) return req.body;
   let raw = "";
   if (typeof req.body === "string") raw = req.body;
@@ -46,7 +47,7 @@ async function body(req) {
   else if (typeof req.on === "function") {
     raw = await new Promise((resolve, reject) => {
       let s = "";
-      req.on("data", (c) => { s += c; if (s.length > 20000) { reject(new Error("too big")); } });
+      req.on("data", (c) => { s += c; if (s.length > max) { reject(new Error("too big")); } });
       req.on("end", () => resolve(s));
       req.on("error", reject);
     });
@@ -180,10 +181,15 @@ function missingColumn(e, col) {
   const t = String((e && (e.body || e.message)) || "");
   return /42703|PGRST204|column .* does not exist|could not find the .* column/i.test(t) && (!col || t.indexOf(col) >= 0);
 }
+// True when a Supabase error means "this table does not exist" (e.g. gc_settings before supabase_update_v11.sql).
+function missingTable(e, table) {
+  const t = String((e && (e.body || e.message)) || "");
+  return /42P01|PGRST205|relation .* does not exist|could not find the table/i.test(t) && (!table || t.indexOf(table) >= 0);
+}
 const enc = encodeURIComponent;
 
 module.exports = {
   missingEnv,
   env, json, fail, guard, query, body, verifyInitData, verifyWidget, makeToken, readToken, authUid,
-  isAdmin, adminIds, userHash, configured, sb, enc, cleanUser, missingColumn
+  isAdmin, adminIds, userHash, configured, sb, enc, cleanUser, missingColumn, missingTable
 };

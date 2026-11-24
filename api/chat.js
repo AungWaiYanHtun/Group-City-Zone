@@ -9,6 +9,10 @@
 // GET  /api/chat?view=links                               chat info Links tab: last 50 public messages with a link
 // POST /api/chat {action:"send", room, uid?, text}         send a message
 // POST /api/chat {action:"delete", id}                     delete own message (admins: any message)
+// GET  /api/chat?view=settings                            public chat name / photo / description (any logged-in user)
+// POST /api/chat {action:"settings", name, description, photo?}   admins only: edit the public chat
+//      photo: omitted = keep, "" = remove, "data:image/jpeg;base64,..." (≤ 120 KB) = new photo
+//      (summary also answers settingsV = the settings version, so clients refetch only when it changed)
 //
 // Non-admins never receive other users' Telegram IDs: each message carries `u` (opaque hash) and `mine`.
 // Every authenticated request also stamps gc_users.last_seen (at most once a minute per user) for "online / last seen".
@@ -23,6 +27,71 @@ const ONLINE_MS = 5 * 60 * 1000;  // "online" = seen in the last 5 minutes
 const SEEN_EVERY = 60 * 1000;     // write last_seen at most once a minute per user (per server instance)
 const RECHECK_MS = 10 * 60 * 1000; // column missing: try again after 10 minutes (the owner may have run the SQL)
 const LINKS_MAX = 50;
+
+// ---------- public chat settings (gc_settings row 'public_chat', from supabase_update_v11.sql) ----------
+const SET_KEY = "public_chat";
+const NAME_MAX = 64, DESC_MAX = 255, PHOTO_MAX = 120 * 1024;   // photo: decoded JPEG bytes
+const SET_DEFAULT = { name: "Group City Chat", photo: "", description: "", v: "" };
+const SET_TTL = 15000;            // per server instance; a save clears it
+const NEED_V11 = "Run supabase_update_v11.sql first (Supabase → SQL Editor).";
+const setCache = { at: 0, val: null };
+function settingsOut(r) {
+  if (!r) return Object.assign({}, SET_DEFAULT);
+  return {
+    name: String(r.name || "").trim() || SET_DEFAULT.name,
+    photo: typeof r.photo === "string" && /^data:image\/jpeg;base64,/.test(r.photo) ? r.photo : "",
+    description: String(r.description || ""),
+    v: String(r.updated_at || "")
+  };
+}
+// Never throws for a missing table: the chat simply uses the defaults until the SQL is run.
+async function readSettings() {
+  if (setCache.val && Date.now() - setCache.at < SET_TTL) return setCache.val;
+  let val;
+  try {
+    const rows = await L.sb("gc_settings?select=key,name,photo,description,updated_at&key=eq." + SET_KEY + "&limit=1");
+    val = settingsOut(rows && rows[0]);
+  } catch (e) {
+    if (!L.missingTable(e, "gc_settings")) throw e;
+    val = Object.assign({ missing: true }, SET_DEFAULT);
+  }
+  setCache.at = Date.now(); setCache.val = val;
+  return val;
+}
+function cleanName(v) { return cleanText(typeof v === "string" ? v.replace(/\s*\n\s*/g, " ") : v).replace(/\s{2,}/g, " "); }
+// "data:image/jpeg;base64,..." with a real JPEG inside and at most PHOTO_MAX bytes. Returns the url, or null.
+function checkPhoto(v) {
+  if (typeof v !== "string") return null;
+  const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(v);
+  if (!m || m[1].length > Math.ceil(PHOTO_MAX / 3) * 4) return null;
+  const buf = Buffer.from(m[1], "base64");
+  if (buf.length < 100 || buf.length > PHOTO_MAX || buf[0] !== 0xff || buf[1] !== 0xd8 || buf[2] !== 0xff) return null;
+  return v;
+}
+async function saveSettings(me, b) {
+  const name = cleanName(b.name), description = cleanText(b.description);
+  if (!name) return { status: 400, message: "Enter a chat name." };
+  if (name.length > NAME_MAX) return { status: 400, message: "Name is too long (max " + NAME_MAX + " characters)." };
+  if (description.length > DESC_MAX) return { status: 400, message: "Description is too long (max " + DESC_MAX + " characters)." };
+  const row = { key: SET_KEY, name: name, description: description, updated_at: new Date().toISOString(), updated_by: Number(me) };
+  if (b.photo !== undefined && b.photo !== null) {
+    if (b.photo === "") row.photo = "";
+    else {
+      const ph = checkPhoto(b.photo);
+      if (!ph) return { status: 400, message: "Photo must be a JPEG under 120 KB." };
+      row.photo = ph;
+    }
+  }
+  let saved;
+  try {
+    saved = await L.sb("gc_settings?on_conflict=key", { method: "POST", prefer: "resolution=merge-duplicates,return=representation", body: [row] });
+  } catch (e) {
+    if (L.missingTable(e, "gc_settings")) return { status: 503, message: NEED_V11 };
+    throw e;
+  }
+  setCache.at = 0; setCache.val = null;
+  return { status: 200, settings: settingsOut(saved && saved[0] ? saved[0] : row) };
+}
 
 // Banned words / phrases (whole words, case-insensitive). Edit this list as you like.
 const BANNED = [
@@ -219,6 +288,12 @@ module.exports = async (req, res) => {
         const users = await usersById(rows.map((m) => m.uid));
         return L.json(res, 200, { ok: true, messages: rows.map((m) => shape(m, users, me, admin)) });
       }
+      if (q.view === "settings") {
+        const st = await readSettings();
+        const out = { ok: true, isAdmin: admin, settings: { name: st.name, photo: st.photo, description: st.description, v: st.v } };
+        if (st.missing && admin) out.needSql = NEED_V11;
+        return L.json(res, 200, out);
+      }
       if (q.view === "summary") {
         const pub = await L.sb("gc_messages?select=id,room,uid,text,created_at&deleted=is.false&room=eq.public&order=id.desc&limit=1");
         let sup = null, waiting = 0;
@@ -231,7 +306,9 @@ module.exports = async (req, res) => {
           if (s && s[0]) sup = shape(s[0], await usersById([s[0].uid]), me, false);
         }
         const pubMsg = pub && pub[0] ? shape(pub[0], await usersById([pub[0].uid]), me, admin) : null;
-        return L.json(res, 200, { ok: true, isAdmin: admin, public: pubMsg, support: sup, waiting: waiting });
+        let settingsV;
+        try { settingsV = (await readSettings()).v; } catch (e) { console.error("settings", e && e.message); }
+        return L.json(res, 200, { ok: true, isAdmin: admin, public: pubMsg, support: sup, waiting: waiting, settingsV: settingsV });
       }
       if (q.view === "threads") {
         if (!admin) return L.fail(res, 403, "Admins only.");
@@ -253,8 +330,15 @@ module.exports = async (req, res) => {
     }
 
     // POST
-    const b = await L.body(req);
-    const action = String(b.action || "");
+    let b;
+    try { b = await L.body(req, 200000); } catch (e) { return L.fail(res, 413, "Request is too big."); }
+    const action = String(b.action || L.query(req).action || "");
+    if (action === "settings") {
+      if (!admin) return L.fail(res, 403, "Only admins can edit this chat.");
+      const r = await saveSettings(me, b);
+      if (r.status !== 200) return L.fail(res, r.status, r.message);
+      return L.json(res, 200, { ok: true, settings: r.settings });
+    }
     if (action === "send") {
       const r = resolveRoom(me, admin, String(b.room || ""), b.uid);
       if (r.err) return L.fail(res, 400, r.err);
@@ -289,4 +373,4 @@ module.exports = async (req, res) => {
   }
 };
 
-module.exports._test = { hasBanned, cleanText, resolveRoom, touchSeen, presence, memberOrder, ONLINE_MS, SEEN_EVERY };
+module.exports._test = { hasBanned, cleanText, resolveRoom, touchSeen, presence, memberOrder, ONLINE_MS, SEEN_EVERY, checkPhoto, setCache, NAME_MAX, DESC_MAX, PHOTO_MAX };
