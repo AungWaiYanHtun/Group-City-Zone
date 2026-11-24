@@ -101,11 +101,103 @@
     return null;
   }
   function setChat(s) { try { if (s) localStorage.setItem(CKEY, JSON.stringify(s)); else localStorage.removeItem(CKEY); } catch (e) {} }
+  // ---------- network status (Telegram-style "Connecting..." / "Updating..." in the header title) ----------
+  // Every request to this site's /api and to the worker goes through netFetch, which counts requests in flight and
+  // records per origin whether the last one reached the server. States: "connecting" (offline, or the last request
+  // to an origin failed / timed out), "updating" (a request has been running for NET_DEBOUNCE ms during the first
+  // load or while recovering from "connecting"), "ok". Background polls while everything is fine never show anything.
+  var NET_DEBOUNCE = 400, NET_TIMEOUT = 15000, NET_RETRY_MAX = 30000;
+  var net = { inflight: 0, initial: true, slow: false, slowOn: false, slowGen: 0, fail: {}, offline: false, down: false, state: "ok", retryOn: false, retryMs: 0, retryGen: 0, groupsFailed: false };
+  try { net.offline = !!(window.navigator && navigator.onLine === false); net.down = net.offline; } catch (e) {}
+  function netOrigin(url) { return /^\//.test(String(url)) ? "api" : "worker"; }
+  function netFailing() { for (var k in net.fail) { if (net.fail[k]) return true; } return false; }
+  function netCalc() {
+    if (net.offline) return "connecting";
+    if (net.slow && net.inflight > 0 && (net.initial || net.down)) return "updating";
+    if (netFailing()) return "connecting";
+    return "ok";
+  }
+  function netLabel(s) { return s === "connecting" ? "Connecting" : s === "updating" ? "Updating" : ""; }
+  function netDots() { var d = el("span", "ndots"); d.setAttribute("aria-hidden", "true"); for (var i = 0; i < 3; i++) d.appendChild(el("i", null, ".")); return d; }
+  function netPaint() {
+    var t = $("hd-title"), w = $("hd-word"), st = $("hd-stat"), s = net.state;
+    if (t) t.classList.toggle("net", s !== "ok");
+    if (w && s !== "ok") w.textContent = netLabel(s);          // keep the old word while fading back to the name
+    if (st) st.setAttribute("aria-hidden", s === "ok" ? "true" : "false");
+    renderSub();
+  }
+  function netUpdate() { var s = netCalc(); if (s !== net.state) { net.state = s; netPaint(); } }
+  function netStart() {
+    net.inflight++;
+    if (!net.slow && !net.slowOn) {
+      net.slowOn = true;
+      var gen = net.slowGen;      // the debounce restarts whenever the app goes idle in between
+      setTimeout(function () { if (gen !== net.slowGen) return; net.slowOn = false; if (net.inflight > 0) { net.slow = true; netUpdate(); } }, NET_DEBOUNCE);
+    }
+    netUpdate();
+  }
+  function netEnd(origin, reached) {
+    net.inflight = Math.max(0, net.inflight - 1);
+    var was = !!net.fail[origin];
+    net.fail[origin] = !reached;
+    if (!reached) { net.down = true; netRetry(); }
+    else if (was) Promise.resolve().then(function () { netRecovered(origin); });
+    if (!net.inflight) { net.slow = false; net.slowOn = false; net.slowGen++; net.initial = false; }
+    if (!netFailing() && !net.offline) { net.down = false; netRetryReset(); }
+    netUpdate();
+  }
+  function netFetch(url, init) {
+    init = init || {};
+    var origin = netOrigin(url), done = false, ctl = null;
+    try { if (typeof AbortController === "function") { ctl = new AbortController(); init.signal = ctl.signal; } } catch (e) { ctl = null; }
+    netStart();
+    if (ctl) setTimeout(function () { if (!done) { try { ctl.abort(); } catch (e) {} } }, NET_TIMEOUT);
+    var fin = function (reached) { if (done) return; done = true; netEnd(origin, reached); };
+    var p;
+    try { p = fetch(url, init); } catch (e) { p = Promise.reject(e); }
+    return p.then(function (r) { fin(!(r && (r.status === 502 || r.status === 503 || r.status === 504))); return r; },
+      function (e) { fin(false); throw e; });
+  }
+  // retry with backoff while an origin is failing (paused while the device is offline; "online" retries at once)
+  function netRetryReset() { net.retryGen++; net.retryOn = false; net.retryMs = 0; }   // drops a pending retry
+  function netRetry() {
+    if (net.retryOn || net.offline) return;
+    net.retryOn = true;
+    net.retryMs = Math.min(net.retryMs ? net.retryMs * 2 : 1000, NET_RETRY_MAX);
+    var gen = net.retryGen;
+    setTimeout(function () { if (gen !== net.retryGen) return; net.retryOn = false; netProbe(); }, net.retryMs);
+  }
+  function netProbe() {
+    if (net.offline) return;
+    Object.keys(net.fail).forEach(function (o) {
+      if (!net.fail[o]) return;
+      var c = getChat(), h = c ? { Authorization: "Bearer " + c.token } : undefined;
+      var req = o === "worker" ? netFetch(API + "/app/api/groups", { credentials: "omit", mode: "cors", cache: "no-store" })
+        : netFetch("/api/chat?view=summary", { headers: h, credentials: "same-origin", cache: "no-store" });
+      req.then(function () {}, function () {});
+    });
+  }
+  // an origin answers again: refresh what it serves
+  function netRecovered(origin) {
+    if (origin === "worker") { if (net.groupsFailed) load(); return; }
+    if (!chatReady()) return;
+    if (ch && screens[screens.length - 1] === "v-chat") fetchMsgs(false);
+    else if (current === "msg" && !screens.length) renderMsgTab();
+    else loadSummary(true);
+  }
+  function netOffline() { net.offline = true; net.down = true; net.fail.api = true; net.fail.worker = true; netUpdate(); }
+  function netOnline() { net.offline = false; net.down = true; netRetryReset(); net.fail.api = true; net.fail.worker = true; netUpdate(); netProbe(); }
+  try {
+    if (window.addEventListener) { window.addEventListener("offline", netOffline); window.addEventListener("online", netOnline); }
+    document.addEventListener("visibilitychange", function () { if (!document.hidden && !net.offline && netFailing()) netProbe(); });
+  } catch (e) {}
+  window.gcNet = { state: function () { return net.state; } };   // read-only, for debugging
+
   function chatApi(path, opts) {
     opts = opts || {};
     var headers = { "Content-Type": "application/json" }, c = getChat();
     if (c && !opts.noAuth) headers.Authorization = "Bearer " + c.token;
-    return fetch(path, { method: opts.body ? "POST" : "GET", headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: "same-origin", cache: "no-store" })
+    return netFetch(path, { method: opts.body ? "POST" : "GET", headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: "same-origin", cache: "no-store" })
       .then(function (r) { return r.json().catch(function () { return { ok: false }; }).then(function (d) { d = d || {}; d._status = r.status; return d; }); });
   }
   function saveChatLogin(d) {
@@ -229,7 +321,7 @@
     opts = opts || {};
     var headers = { "Content-Type": "application/json" };
     if (opts.auth) { var s = getSession(); if (s) headers.Authorization = "Bearer " + s.token; }
-    return fetch(API + path, { method: opts.method || (opts.body ? "POST" : "GET"), headers: opts.body || opts.auth ? headers : undefined, body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: "omit", mode: "cors" })
+    return netFetch(API + path, { method: opts.method || (opts.body ? "POST" : "GET"), headers: opts.body || opts.auth ? headers : undefined, body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: "omit", mode: "cors" })
       .then(function (r) { return r.json().catch(function () { return { ok: false }; }).then(function (d) { d = d || {}; d._status = r.status; return d; }); });
   }
 
@@ -307,6 +399,7 @@
   function load() {
     api("/app/api/groups").then(function (d) {
       if (!d.ok) throw new Error("bad");
+      net.groupsFailed = false;
       data.featured = clean(d.featured); data.groups = clean(d.groups);
       if (d.bot) data.bot = String(d.bot);
       data.short = String(d.short || "");
@@ -314,6 +407,7 @@
       prices(); $("promo").classList.remove("hide");
       chips(); render();
     }).catch(function () {
+      net.groupsFailed = true;
       var list = $("list"); list.textContent = "";
       var e = el("div", "empty"); e.appendChild(el("b", null, "Couldn't load groups")); e.appendChild(document.createTextNode("Check your connection."));
       var b = el("button", "big", "Try again"); b.type = "button"; b.onclick = function () { list.textContent = ""; list.appendChild(el("div", "empty", "Loading groups…")); load(); };
@@ -741,18 +835,25 @@
   var pollTimer = null, pollBusy = false, sending = false, errTimer = null;
   var MAX_SHOWN = 200;
   function chatQuery(after) { return roomQuery(ch.room, ch.uid, after); }
-  function setSub(text) { $("ch-sub").textContent = text; }
-  function subNormal() { if (ch) setSub(ch.sub); }
+  // chat subtitle: the network tracker's state when not ok (same words as the header), else the chat's own line.
+  // Opening a cached chat whose first read is slow also shows "Updating..." here only.
+  function renderSub() {
+    if (!ch) return;
+    var e = $("ch-sub"), s = net.state !== "ok" ? net.state : (ch.slow && !ch.loaded ? "updating" : "ok");
+    if (s === "ok") { e.textContent = ch.sub; e.classList.remove("cnet"); return; }
+    e.textContent = netLabel(s); e.appendChild(netDots()); e.classList.add("cnet");
+  }
+  function subNormal() { renderSub(); }
   function openChat(o) {
     if (!chatReady()) { tab("msg"); return; }
     stopPoll(); closePop(); closeSearch(true);
-    ch = { room: o.room, uid: o.uid || "", msgs: [], pend: [], admin: !!getChat().isAdmin, loaded: false, cached: false, sub: "" };
+    ch = { room: o.room, uid: o.uid || "", msgs: [], pend: [], admin: !!getChat().isAdmin, loaded: false, cached: false, slow: false, sub: "" };
     var hav = $("ch-av"), nav;
     if (o.room === "public") { nav = el("span", "av cav", "💬"); nav.style.background = "#3d8bd9"; $("ch-title").textContent = "Group City Chat"; $("ch-sub").textContent = "Everyone on Group City"; }
     else if (o.uid) { nav = avatar(o.photo, o.title, o.seed, "av cav"); $("ch-title").textContent = o.title || "User"; $("ch-sub").textContent = o.sub || "Support thread"; }
     else { nav = el("span", "av cav", "🆘"); nav.style.background = "#e5534b"; $("ch-title").textContent = "Support"; $("ch-sub").textContent = "Ask the Group City team anything"; }
     nav.id = "ch-av"; hav.parentNode.replaceChild(nav, hav);
-    ch.sub = $("ch-sub").textContent;
+    ch.sub = $("ch-sub").textContent; renderSub();
     muteUi();
     $("ch-text").value = ""; autoGrow(); chatErr(""); if ($("ch-emop")) { $("ch-emop").classList.add("hide"); $("ch-emo").classList.remove("on"); }
     $("ch-text").placeholder = o.room === "support" && o.uid ? "Reply as Support" : "Message";
@@ -775,14 +876,13 @@
     var my = ch; pollBusy = true;
     var after = full ? 0 : lastId();      // first open with a cache: only what's newer than the cache
     var hadMsgs = ch.msgs.length > 0;
-    if (first && ch.cached) setTimeout(function () { if (ch === my && pollBusy && !ch.loaded) setSub("Updating…"); }, 1200);
+    if (first && ch.cached) setTimeout(function () { if (ch === my && pollBusy && !ch.loaded) { ch.slow = true; renderSub(); } }, NET_DEBOUNCE);
     chatApi(chatQuery(after)).then(function (d) {
       pollBusy = false;
       if (ch !== my) return;
       if (d._status === 401) { closeAllScreens(); chatExpired(); return; }
       if (!d.ok) {
         if (!hadMsgs && !ch.loaded) { var l = $("ch-list"); l.textContent = ""; l.appendChild(el("div", "cempty", d.message || "Couldn't load messages.")); }
-        else if (!ch.loaded) setSub("Connecting…");
         return;
       }
       // cache is a full page or more behind: replace it with the latest page instead of filling from the middle
@@ -804,7 +904,7 @@
       pollBusy = false;
       if (ch !== my) return;
       if (!hadMsgs && !ch.loaded) { var l = $("ch-list"); l.textContent = ""; l.appendChild(el("div", "cempty", "Couldn't connect. Check your connection.")); }
-      else setSub("Connecting…");   // keep showing the cached messages
+      // with a cache the bubbles stay; the network tracker shows "Connecting..." in the subtitle
     });
   }
   function startPoll() { stopPoll(); pollTimer = setInterval(function () { if (!document.hidden && screens[screens.length - 1] === "v-chat") fetchMsgs(false); }, 5000); }
@@ -1122,7 +1222,7 @@
   $("logout").onclick = logout;
   if (!inTg) $("pr-note").textContent = "One payment lists one group. You pay with Telegram Stars in the bot.";
 
-  chips(); catPicker(); prices(); renderAccount();
+  chips(); catPicker(); prices(); renderAccount(); netUpdate();
   var sp = (inTg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || (new URLSearchParams(location.search).get("tab") || "");
   if (sp === "promote") promote(); else if (sp === "mine" || sp === "profile" || sp === "msg") tab(sp);
   if (inTg) tgChatLogin().then(function () { renderAccount(); refreshTab(); if (current !== "msg") loadSummary(true); });
