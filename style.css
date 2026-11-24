@@ -496,7 +496,9 @@ body.onprof,body.onprof .apphead{background:var(--sec)}
 .pname{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:24px;font-weight:600;letter-spacing:-.2px;max-width:100%;overflow-wrap:anywhere;justify-content:center;line-height:1.2}
 .chip-admin{font-size:12px;font-weight:700;background:#f5b72f;color:#1b1b1b;border-radius:8px;padding:2px 8px;flex:none;letter-spacing:0}
 .pfacts{margin:0 0 12px}
-.pfacts .iact{padding:13px 4px 11px;font-size:14px}
+.pfacts{gap:8px;margin:0 0 12px}
+.pfacts .iact{flex-direction:row;justify-content:center;gap:6px;padding:9px 4px;font-size:13px;border-radius:12px}
+.pfacts .iact svg{width:18px;height:18px}
 .pfabout{margin-bottom:12px}
 .pfabout .iarow{padding:11px 18px}
 #v-profile .pfstars{width:100%;margin:0 0 4px;background:var(--card);border-radius:18px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
@@ -571,10 +573,10 @@ html .screen.story,html.dark .screen.story{background:#000;background-image:none
 .spimg{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 8px}
 .spimg img,.svstage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;display:block}
 .spfoot{flex:none;display:flex;align-items:flex-end;gap:8px;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
-.spcap{flex:1;min-width:0;display:flex;align-items:flex-end;gap:6px;background:rgba(255,255,255,.12);border-radius:24px;padding:0 14px 0 16px;min-height:48px}
-#sp-cap{flex:1;min-width:0;resize:none;border:0;outline:0;background:none;color:#fff;font:inherit;font-size:16px;line-height:21px;padding:13px 0;max-height:110px}
+.spcap{flex:1;min-width:0;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border-radius:24px;padding:0 14px 0 16px;min-height:48px}
+#sp-cap{flex:1;min-width:0;resize:none;border:0;outline:0;background:none;color:#fff;font:inherit;font-size:16px;line-height:21px;padding:13px 0;min-height:47px;height:47px;max-height:110px;display:block;overflow-y:auto}
 #sp-cap::placeholder{color:rgba(255,255,255,.6)}
-.spcount{flex:none;padding-bottom:14px;font-size:13px;color:rgba(255,255,255,.6);font-variant-numeric:tabular-nums}
+.spcount{flex:none;align-self:center;font-size:13px;color:rgba(255,255,255,.6);font-variant-numeric:tabular-nums}
 .spshare{flex:none;height:48px;padding:0 22px;border:0;border-radius:24px;background:#2aa05a;color:#fff;font:inherit;font-size:16px;font-weight:600;cursor:pointer}
 .spshare:disabled{opacity:.55}
 .story .msg.err{margin:8px 10px 0;background:rgba(229,83,75,.85);color:#fff}
@@ -683,3 +685,13 @@ html.dark .ham.plus{color:#5ec27a}
 #st-recv .msg{margin:12px 16px 0}
 .rcshare{width:calc(100% - 32px);margin:14px 16px 4px}
 #st-main .stlinks{margin-top:14px}
+
+/* v15: profile photo viewer */
+.pvimg{display:flex;align-items:center;justify-content:center}
+.pvimg img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px}
+.pvday{margin-left:auto;border:0;border-radius:18px;padding:8px 14px;background:rgba(255,255,255,.14);color:#fff;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.pvfoot{display:flex;gap:10px;padding:10px 12px;padding-bottom:calc(12px + env(safe-area-inset-bottom));flex:none}
+.pvbtn{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;height:44px;border:0;border-radius:12px;background:rgba(255,255,255,.12);color:#fff;font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.pvbtn.red{color:#ff6b62}
+.pvbtn:disabled{opacity:.5}
+.pvbtn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}

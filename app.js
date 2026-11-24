@@ -2167,8 +2167,45 @@
   $("pf-settings").onclick = function () { openSettings(); };
   $("pf-myday").onclick = function () { if (needChatHere()) pickStory(); };
   $("pf-avb").onclick = function () {
+    var ph = myPhoto();
+    if (ph) { openPView(); return; }
     var g = storyGroup(myU());
     if (g) openViewer([g], 0); else if (chatReady()) openPEdit();
+  };
+
+  // ---------- Profile photo viewer: tap the big avatar → full photo, Change / Delete ----------
+  var pvBusy = false;
+  function pvMsg(t) { var m = $("pv-msg"); m.textContent = t || ""; m.classList.toggle("hide", !t); }
+  function pvUi() {
+    var m = getMyProf();
+    $("pv-img").src = myPhoto();
+    $("pv-del").classList.toggle("hide", !(m && m.photo));
+    $("pv-day").classList.toggle("hide", !storyGroup(myU()));
+    $("pv-del").disabled = pvBusy;
+  }
+  function openPView() { pvBusy = false; pvMsg(""); pvUi(); openScreen("v-pview"); }
+  $("pv-close").onclick = goBack;
+  $("pv-change").onclick = function () { if (!needChatHere()) return; goBack(); openPEdit(); };
+  $("pv-day").onclick = function () { var g = storyGroup(myU()); if (g) { goBack(); openViewer([g], 0); } };
+  function pvDelete() {
+    var m = getMyProf(), u = anyUser() || {};
+    if (pvBusy || !m || !m.photo) return;
+    if (!chatReady()) { pvMsg("Connecting… try again in a moment."); return; }
+    var body = { first_name: m.first_name || u.first_name || myName(), last_name: m.first_name ? (m.last_name || "") : (u.last_name || ""), bio: m.bio || "", photo: "" };
+    pvBusy = true; pvUi(); pvMsg("");
+    chatApi("/api/profile", { body: body }).then(function (d) {
+      pvBusy = false;
+      if (d._status === 401) { closeAllScreens(); chatExpired(); return; }
+      if (!d.ok || !d.profile) { pvUi(); pvMsg(d.message || "Couldn't delete. Please try again."); return; }
+      setMyProf(d.profile); renderProfile();
+      if (screens[screens.length - 1] === "v-pview") { if (myPhoto()) pvUi(); else goBack(); }
+    }).catch(function () { pvBusy = false; pvUi(); pvMsg("Couldn't connect. Check your connection."); });
+  }
+  $("pv-del").onclick = function () {
+    if (pvBusy) return;
+    var go = function (ok) { if (ok) pvDelete(); };
+    if (inTg && tg.showConfirm) { try { tg.showConfirm("Delete your profile photo?", go); return; } catch (e) {} }
+    go(window.confirm("Delete your profile photo?"));
   };
 
   // ---------- Edit Info: photo (320x320 JPEG made on this device), first / last name, bio (70) ----------
@@ -2381,11 +2418,11 @@
     sp = { photo: url, busy: false };
     $("sp-img").src = url; $("sp-cap").value = ""; spCount(); spMsg("");
     $("sp-share").disabled = false; $("sp-share").textContent = "Share";
-    openScreen("v-spost");
+    openScreen("v-spost"); spCount();   // measure after the screen is visible (hidden = 0 height)
   }
   function spCount() {
     var t = $("sp-cap"), n = CAPTION_MAX - t.value.length; $("sp-count").textContent = String(n);
-    t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 110) + "px";
+    t.style.height = "auto"; t.style.height = Math.min(Math.max(t.scrollHeight, 47), 110) + "px";
   }
   $("sp-cap").addEventListener("input", spCount);
   $("sp-close").onclick = goBack;
