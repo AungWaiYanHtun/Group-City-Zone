@@ -45,6 +45,22 @@
     } catch (e) {}
     window.open(u, "_blank", "noopener");
   }
+  // Turns links in a chat message into tappable Telegram-style links (text stays plain text, no HTML).
+  function linkify(text) {
+    var box = el("span", "mtx"), re = /(https?:\/\/[^\s<>"]+|(?:^|[^\w.\/@])(?:t\.me|telegram\.me)\/[^\s<>"]+|@[A-Za-z][A-Za-z0-9_]{3,31})/g, last = 0, mt;
+    while ((mt = re.exec(text))) {
+      var raw = mt[0], pre = "";
+      if (raw[0] !== "h" && raw[0] !== "@" && raw[0] !== "t") { pre = raw[0]; raw = raw.slice(1); }
+      var start = mt.index + pre.length, shown = raw.replace(/[.,!?:;)\]}'"]+$/, ""), end = start + shown.length;
+      var url = shown[0] === "@" ? "https://t.me/" + shown.slice(1) : (/^https?:\/\//i.test(shown) ? shown.replace(/^http:\/\//i, "https://") : "https://" + shown);
+      if (start > last) box.appendChild(document.createTextNode(text.slice(last, start)));
+      var a = el("a", "mlink", shown); a.href = url; a.target = "_blank"; a.rel = "noopener";
+      (function (u) { a.onclick = function (e) { e.preventDefault(); e.stopPropagation(); open(u); }; })(url);
+      box.appendChild(a); last = end; re.lastIndex = Math.max(re.lastIndex, end);
+    }
+    if (last < text.length) box.appendChild(document.createTextNode(text.slice(last)));
+    return box;
+  }
   function botName() { return data.bot || BOT; }
   function botLink(start) { var b = botName(); return b ? "https://t.me/" + encodeURIComponent(b) + (start ? "?start=" + encodeURIComponent(start) : "") : ""; }
   function appLink(start) {
@@ -555,7 +571,7 @@
     else if (o.uid) { nav = avatar(o.photo, o.title, o.seed, "av cav"); $("ch-title").textContent = o.title || "User"; $("ch-sub").textContent = o.sub || "Support thread"; }
     else { nav = el("span", "av cav", "🆘"); nav.style.background = "#e5534b"; $("ch-title").textContent = "Support"; $("ch-sub").textContent = "Ask the Group City team anything"; }
     nav.id = "ch-av"; hav.parentNode.replaceChild(nav, hav);
-    $("ch-text").value = ""; autoGrow(); chatErr("");
+    $("ch-text").value = ""; autoGrow(); chatErr(""); if ($("ch-emop")) { $("ch-emop").classList.add("hide"); $("ch-emo").classList.remove("on"); }
     $("ch-text").placeholder = o.room === "support" && o.uid ? "Reply as Support" : "Message";
     var list = $("ch-list"); list.textContent = ""; list.appendChild(el("div", "cempty", "Loading…"));
     openScreen("v-chat");
@@ -632,7 +648,7 @@
       }
       var t = el("div", "btext");
       t.appendChild(el("span", "btime", isNaN(d) ? "" : hhmm(d)));
-      t.appendChild(document.createTextNode(String(m.text || "")));
+      t.appendChild(linkify(String(m.text || "")));
       b.appendChild(t);
       b.onclick = function () { msgMenu(m); };
       row.appendChild(b);
@@ -693,7 +709,37 @@
   };
   $("ch-back").onclick = goBack;
   $("th-back").onclick = goBack;
-  $("ch-form").addEventListener("submit", function (e) { e.preventDefault(); sendMsg(); $("ch-text").focus(); });
+  // Emoji panel (Telegram-style): tap the smiley to open, tap an emoji to insert it at the cursor.
+  var EMOJI = [
+    ["😀", "😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🤭 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕 🤑 🤠 😈 👿 👻 💀 👽 🤖 💩 😺 😸 😹 😻 😼 😽 🙀 😿 😾"],
+    ["👍", "👍 👎 👌 🤌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 👏 🙌 👐 🤲 🤝 🙏 ✍️ 💪 🦾 👀 👁️ 👅 👄 💋 🫶 🙋 🙆 🙅 🤷 🤦 🙇 💁 🧏 👫 👬 👭 💏 💑 👪"],
+    ["❤️", "❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ♥️ 💯 💢 💥 💫 💦 💨 🔥 ✨ ⭐ 🌟 ⚡ 🎉 🎊 🎁 🏆 🥇 👑 💎 💰 💸 📣 📢 🔔 ✅ ❌ ⚠️ ❓ ❗ 🆘 🔞 📌 🔗 💬 🗨️ 👉 🆕 🆓 🔝"],
+    ["🐶", "🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐔 🐧 🐦 🐤 🦄 🐝 🦋 🐌 🐞 🐢 🐍 🐙 🐬 🐳 🦈 🌸 🌹 🌺 🌻 🌼 🌷 🍀 🌿 🌴 🌈 ☀️ 🌙 ⭐ ☁️ ❄️ 🌊"],
+    ["🍔", "🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🌶️ 🌽 🍞 🧀 🍳 🍗 🍖 🍔 🍟 🍕 🌭 🥪 🌮 🍜 🍝 🍣 🍱 🍛 🍚 🍙 🍦 🍩 🍪 🎂 🍰 🍫 🍬 🍭 ☕ 🧋 🍺 🍻 🥂 🍷 🥤"],
+    ["⚽", "⚽ 🏀 🏈 ⚾ 🎾 🏐 🎱 🏓 🏸 🥊 🎮 🕹️ 🎲 🎯 🎳 🎤 🎧 🎵 🎶 🎸 🎹 🎬 📷 📱 💻 ⌚ 🚗 🚕 🏍️ ✈️ 🚀 🏠 🏙️ 🌃 🎡 🏖️ ⛰️ 🗺️ 🇲🇲"]
+  ];
+  var emoCat = 0, emoSel = null;
+  function emoGrid() {
+    var g = $("ch-emog"); g.textContent = ""; g.scrollTop = 0;
+    EMOJI[emoCat][1].split(" ").forEach(function (e) {
+      if (!e) return; var b = el("button", null, e); b.type = "button";
+      b.onclick = function () { emoInsert(e); };
+      g.appendChild(b);
+    });
+    var tb = $("ch-emot").children; for (var i = 0; i < tb.length; i++) tb[i].classList.toggle("on", i === emoCat);
+  }
+  function emoInsert(e) {
+    var t = $("ch-text"), v = t.value, s = emoSel ? emoSel[0] : v.length, en = emoSel ? emoSel[1] : v.length;
+    if (v.length - (en - s) + e.length > (t.maxLength > 0 ? t.maxLength : 1000)) return;
+    t.value = v.slice(0, s) + e + v.slice(en); emoSel = [s + e.length, s + e.length]; autoGrow();
+  }
+  function emoShow(on) {
+    $("ch-emop").classList.toggle("hide", !on); $("ch-emo").classList.toggle("on", on);
+    if (on) { var t = $("ch-text"); emoSel = [t.selectionStart || t.value.length, t.selectionEnd || t.value.length]; t.blur(); if (!$("ch-emot").children.length) { EMOJI.forEach(function (c, i) { var b = el("button", null, c[0]); b.type = "button"; b.onclick = function () { emoCat = i; emoGrid(); }; $("ch-emot").appendChild(b); }); } emoGrid(); var l = $("ch-list"); setTimeout(function () { l.scrollTop = l.scrollHeight; }, 30); }
+  }
+  $("ch-emo").addEventListener("click", function () { var on = $("ch-emop").classList.contains("hide"); emoShow(on); if (!on) $("ch-text").focus(); });
+  $("ch-text").addEventListener("focus", function () { emoShow(false); });
+  $("ch-form").addEventListener("submit", function (e) { e.preventDefault(); sendMsg(); emoSel = null; if ($("ch-emop").classList.contains("hide")) $("ch-text").focus(); });
   $("ch-text").addEventListener("input", autoGrow);
   $("ch-text").addEventListener("keydown", function (e) {
     var fine = window.matchMedia && window.matchMedia("(pointer:fine)").matches;
