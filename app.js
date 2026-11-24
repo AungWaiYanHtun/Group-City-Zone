@@ -11,8 +11,19 @@
   var inTg = !!(tg && tg.initData);          // opened inside Telegram (signed data present)
   if (inTg) {
     document.documentElement.classList.add("tg");
-    try { tg.ready(); tg.expand(); if (tg.setHeaderColor) tg.setHeaderColor("secondary_bg_color"); } catch (e) {}
+    try { tg.ready(); tg.expand(); if (tg.setHeaderColor) tg.setHeaderColor("bg_color"); } catch (e) {}
   }
+  // light / dark look: Telegram's colorScheme inside Telegram, the device setting in a browser (style only)
+  (function () {
+    var root = document.documentElement, mq = null;
+    try { mq = !inTg && window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null; } catch (e) {}
+    function apply() { root.classList.toggle("dark", inTg ? tg.colorScheme === "dark" : !!(mq && mq.matches)); }
+    apply();
+    try {
+      if (inTg && tg.onEvent) tg.onEvent("themeChanged", apply);
+      else if (mq && mq.addEventListener) mq.addEventListener("change", apply);
+    } catch (e) {}
+  })();
 
   var data = { featured: [], groups: [], bot: BOT, short: "", price: 10, topPrice: 50, days: 30 };
   var cat = "All", pkg = "top", busy = false, mineLoaded = false, current = "groups";
@@ -733,6 +744,10 @@
   Array.prototype.forEach.call(document.querySelectorAll(".nav button"), function (b) { b.onclick = function () { tab(b.getAttribute("data-tab")); }; });
   $("q").addEventListener("input", render);
   $("promo-add").onclick = function () { promote(); };
+  // Telegram-style header + floating button (UI shortcuts to existing actions)
+  $("fab-add").onclick = function () { promote(); };
+  $("hd-search").onclick = function () { if (current !== "groups" || screens.length) tab("groups"); var q = $("q"); q.focus(); try { q.select(); } catch (e) {} };
+  $("hd-menu").onclick = function () { tab("profile"); };
   $("pr-close").onclick = closeSheet;
   $("v-promote").addEventListener("click", function (e) { if (e.target === $("v-promote")) closeSheet(); });
   $("pk-normal").onclick = function () { setPkg("normal"); };

@@ -3,28 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#17212b">
+<meta name="theme-color" content="#ffffff">
 <meta name="description" content="Group City: find Telegram groups to join, or promote your own.">
 <title>Group City</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%99%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%2341b4f0'/%3E%3Cstop offset='1' stop-color='%231d8fd8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='24' cy='24' r='24' fill='url(%23g)'/%3E%3Cpath fill='%23fff' d='M12 35V24h6v11zm8 0V15l4-3 4 3v20zm10 0V20h6v15z'/%3E%3Cpath fill='%2341b4f0' d='M23 18h2v2h-2zm0 5h2v2h-2zm0 5h2v2h-2zM14 27h2v2h-2zm18-3h2v2h-2zm0 5h2v2h-2z'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="config.js"></script>
 </head>
 <body>
 <div class="wrap">
+  <!-- App header (Telegram-style), shown on every tab -->
+  <header class="apphead">
+    <span class="logo-ring"><svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gcLogoG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#41b4f0"/><stop offset="1" stop-color="#1d8fd8"/></linearGradient></defs><circle cx="24" cy="24" r="24" fill="url(#gcLogoG)"/><path fill="#fff" d="M12 35V24h6v11zm8 0V15l4-3 4 3v20zm10 0V20h6v15z"/><path fill="#2a9fe2" d="M23 18h2v2h-2zm0 5h2v2h-2zm0 5h2v2h-2zM14 27h2v2h-2zm18-3h2v2h-2zm0 5h2v2h-2z"/><path d="M9 38.5c9-2.6 21-2.6 30 0" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".85"/></svg></span>
+    <div class="appname">Group City</div>
+    <button class="hbtn" id="hd-search" type="button" aria-label="Search groups"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button>
+    <button class="hbtn" id="hd-menu" type="button" aria-label="Profile"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
+  </header>
   <!-- Groups -->
   <section id="v-groups">
     <div class="top">
       <div class="toprow">
-        <div><div class="title">🏙️ Group City</div><div class="sub">Find groups to join</div></div>
+        <div><div class="title">Groups</div><div class="sub">Find groups to join</div></div>
         <div class="acct hide" id="acct-groups"></div>
       </div>
-      <label class="search"><span aria-hidden="true">🔍</span><input id="q" type="search" placeholder="Search groups..." autocomplete="off" enterkeyhint="search" aria-label="Search groups"></label>
+      <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><input id="q" type="search" placeholder="Search groups..." autocomplete="off" enterkeyhint="search" aria-label="Search groups"></label>
     </div>
     <div class="chips hide" id="chips"></div>
     <div class="promo hide" id="promo"><div><b>⭐ Promote your group</b><span id="promo-sub">From 10 Stars</span></div><button id="promo-add" type="button">Add</button></div>
     <div id="list"><div class="empty">Loading groups…</div></div>
+    <button class="fab" id="fab-add" type="button" aria-label="Promote your group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5c-4.97 0-9 3.58-9 8 0 2.1.91 4 2.4 5.43L4.5 20.5l4.1-1.5c1.04.33 2.18.5 3.4.5 4.97 0 9-3.58 9-8s-4.03-8-9-8z"/><path d="M12 8v7M8.5 11.5h7"/></svg></button>
   </section>
 
   <!-- Promote -->
@@ -73,16 +81,16 @@
 
   <!-- Messages -->
   <section id="v-msg" class="hide">
-    <div class="top"><div class="toprow"><div><div class="title">💬 Messages</div><div class="sub">Support and the Group City chat</div></div></div></div>
+    <div class="top"><div class="toprow"><div><div class="title">Messages</div><div class="sub">Support and the Group City chat</div></div></div></div>
     <div id="msg-login" class="hide"></div>
     <div class="chats" id="chats">
       <button class="crow" id="row-support" type="button">
-        <span class="av cav" style="background:#e5534b">🆘</span>
+        <span class="av cav av-ico" style="background:linear-gradient(#ff8a7a,#e5534b)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="13" width="4" height="6" rx="1.6"/><rect x="17" y="13" width="4" height="6" rx="1.6"/><path d="M19 19c0 1.5-2 2.5-5 2.5"/></svg></span>
         <span class="cinfo"><span class="ctop"><span class="cname">Support</span><span class="ctime" id="sup-time"></span></span>
         <span class="cbot"><span class="cprev" id="sup-prev">Message the Group City team</span><span class="cbadge hide" id="sup-badge"></span></span></span>
       </button>
       <button class="crow" id="row-public" type="button">
-        <span class="av cav" style="background:#3d8bd9">💬</span>
+        <span class="av cav av-ico" style="background:linear-gradient(#62d77c,#2aa05a)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z"/><path d="M17 9h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2.5L16 19h-4a2 2 0 0 1-1.7-1"/></svg></span>
         <span class="cinfo"><span class="ctop"><span class="cname">Group City Chat</span><span class="ctime" id="pub-time"></span></span>
         <span class="cbot"><span class="cprev" id="pub-prev">Chat with everyone</span></span></span>
       </button>
@@ -92,7 +100,7 @@
 
   <!-- Profile -->
   <section id="v-profile" class="hide">
-    <div class="top"><div class="toprow"><div><div class="title">👤 Profile</div><div class="sub">Your account and groups</div></div></div></div>
+    <div class="top"><div class="toprow"><div><div class="title">Profile</div><div class="sub">Your account and groups</div></div></div></div>
     <div id="pf-login" class="hide"></div>
     <div id="pf-body" class="hide">
       <div class="pcard">
@@ -110,22 +118,23 @@
 
 <!-- Support inbox (admins) -->
 <section id="v-threads" class="screen hide">
-  <div class="chead"><button class="back" id="th-back" type="button" aria-label="Back">←</button>
-    <span class="av cav" style="background:#e5534b">🆘</span>
-    <div class="ct"><div class="ctitle">Support inbox</div><div class="csub" id="th-sub">All user threads</div></div></div>
+  <div class="chead"><button class="back" id="th-back" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5.5 4.5 12l6.5 6.5"/></svg></button>
+    <div class="cpill"><span class="av cav av-ico" style="background:linear-gradient(#ff8a7a,#e5534b)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="13" width="4" height="6" rx="1.6"/><rect x="17" y="13" width="4" height="6" rx="1.6"/><path d="M19 19c0 1.5-2 2.5-5 2.5"/></svg></span>
+    <div class="ct"><div class="ctitle">Support inbox</div><div class="csub" id="th-sub">All user threads</div></div></div></div>
   <div class="cbody" id="th-list"></div>
 </section>
 
 <!-- Chat -->
 <section id="v-chat" class="screen hide">
-  <div class="chead"><button class="back" id="ch-back" type="button" aria-label="Back">←</button>
-    <span class="av cav" id="ch-av"></span>
-    <div class="ct"><div class="ctitle" id="ch-title"></div><div class="csub" id="ch-sub"></div></div></div>
+  <div class="chead"><button class="back" id="ch-back" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5.5 4.5 12l6.5 6.5"/></svg></button>
+    <div class="cpill"><span class="av cav" id="ch-av"></span>
+    <div class="ct"><div class="ctitle" id="ch-title"></div><div class="csub" id="ch-sub"></div></div></div></div>
   <div class="cbody" id="ch-list"></div>
   <div class="cerr hide" id="ch-err"></div>
   <form class="cinput" id="ch-form" autocomplete="off">
-    <textarea id="ch-text" rows="1" maxlength="1000" placeholder="Message" aria-label="Message" enterkeyhint="send"></textarea>
-    <button class="send" id="ch-send" type="submit" aria-label="Send">➤</button>
+    <div class="cfield"><label class="emo" for="ch-text" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2"/><circle cx="9" cy="10" r=".9" class="dot"/><circle cx="15" cy="10" r=".9" class="dot"/></svg></label>
+    <textarea id="ch-text" rows="1" maxlength="1000" placeholder="Message" aria-label="Message" enterkeyhint="send"></textarea></div>
+    <button class="send" id="ch-send" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
   </form>
 </section>
 
@@ -141,9 +150,9 @@
 
 <nav class="nav">
   <div class="navin">
-    <button class="on" data-tab="groups" type="button"><i>🏠</i>Groups</button>
-    <button data-tab="msg" type="button"><i>💬</i>Messages</button>
-    <button data-tab="profile" type="button"><i>👤</i>Profile</button>
+    <button class="on" data-tab="groups" type="button"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg></i>Groups</button>
+    <button data-tab="msg" type="button"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z"/><path d="M17 9h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2.5L16 19h-4a2 2 0 0 1-1.7-1"/></svg></i>Messages</button>
+    <button data-tab="profile" type="button"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="10" r="3.3"/><path d="M5.8 18.6c1.4-2.3 3.6-3.5 6.2-3.5s4.8 1.2 6.2 3.5"/></svg></i>Profile</button>
   </div>
 </nav>
 <script src="app.js"></script>
