@@ -798,13 +798,16 @@
     $(id).classList.add("hide"); screens = screens.filter(function (x) { return x !== id; });
     if (id === "v-chat") { stopPoll(); closePop(); closeSearch(true); }
     if (id === "v-threads") stopThreadPoll();
+    if (id === "v-info") { closeInfoPop(); info = null; }
     syncBack();
   }
   function goBack() {
     var top = screens[screens.length - 1]; if (!top) return;
     if (top === "v-chat" && popOpen()) { closePop(); return; }
     if (top === "v-chat" && srch.on) { closeSearch(); return; }
+    if (top === "v-info" && infoPopOpen()) { closeInfoPop(); return; }
     closeScreen(top);
+    if (top === "v-info" && screens[screens.length - 1] === "v-chat") { muteUi(); fetchMsgs(false); return; }
     if (top === "v-chat" && screens.indexOf("v-threads") >= 0) { loadThreads(); startThreadPoll(); }
     if (!screens.length && current === "msg") renderMsgTab();
   }
@@ -839,7 +842,7 @@
         var tm = isMuted("support", String(t.uid));
         if (t.waiting) { bot.appendChild(el("span", "cbadge dot " + (tm ? "muted" : "unm"))); if (!tm) top.lastChild.classList.add("unread"); }
         info.appendChild(top); info.appendChild(bot); row.appendChild(info);
-        row.onclick = function () { openChat({ room: "support", uid: String(t.uid), title: t.name, sub: (t.username ? "@" + t.username + " · " : "") + "ID " + t.uid, photo: t.photo, seed: t.u }); };
+        row.onclick = function () { openChat({ room: "support", uid: String(t.uid), title: t.name, username: t.username || "", sub: (t.username ? "@" + t.username + " · " : "") + "ID " + t.uid, photo: t.photo, seed: t.u }); };
         box.appendChild(row);
       });
     }).catch(function () { thBusy = false; });
@@ -862,7 +865,8 @@
   function openChat(o) {
     if (!chatReady()) { tab("msg"); return; }
     stopPoll(); closePop(); closeSearch(true);
-    ch = { room: o.room, uid: o.uid || "", msgs: [], pend: [], admin: !!getChat().isAdmin, loaded: false, cached: false, slow: false, sub: "" };
+    ch = { room: o.room, uid: o.uid || "", msgs: [], pend: [], admin: !!getChat().isAdmin, loaded: false, cached: false, slow: false, sub: "",
+      info: { title: o.title || "", username: o.username || "", photo: o.photo || "", seed: o.seed || "" } };
     var hav = $("ch-av"), nav;
     if (o.room === "public") { nav = el("span", "av cav", "💬"); nav.style.background = "#3d8bd9"; $("ch-title").textContent = "Group City Chat"; $("ch-sub").textContent = "Everyone on Group City"; }
     else if (o.uid) { nav = avatar(o.photo, o.title, o.seed, "av cav"); $("ch-title").textContent = o.title || "User"; $("ch-sub").textContent = o.sub || "Support thread"; }
@@ -1067,13 +1071,232 @@
   $("ch-more").onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); if (popOpen()) closePop(); else openPop(); };
   $("ch-popbg").onclick = closePop;
   $("ch-popbg").addEventListener("touchmove", function (e) { closePop(); if (e && e.preventDefault) e.preventDefault(); });
-  $("ch-mute").onclick = function () {
-    if (!ch) { closePop(); return; }
+  // one mute switch for the open chat: chat header icon, ⋮ menus, info page and the Messages list all follow it
+  function toggleMute() {
+    if (!ch) return;
     setMuted(ch.room, ch.uid, !isMuted(ch.room, ch.uid));
-    muteUi(); closePop();
+    muteUi(); infoMuteUi(); muteIcons();
     if (ch.room === "public") showUnread(0);
-  };
+  }
+  $("ch-mute").onclick = function () { if (ch) toggleMute(); closePop(); };
   $("ch-find").onclick = function () { closePop(); openSearch(); };
+
+  // ---------- chat info (tap the chat header pill): Telegram-style group / support / user info ----------
+  // group  = Group City Chat: members (online / last seen, Admin pill) + Links tab
+  // support = a user's own support chat; user = an admin's view of one user's support thread
+  var info = null;                 // {kind, tab, my chat}
+  var MEMBERS_TTL = 60000, memCache = null, linkCache = null, infoBusy = { m: false, l: false, u: false };
+  function infoPopOpen() { return !$("ci-pop").classList.contains("hide"); }
+  function closeInfoPop() {
+    $("ci-pop").classList.add("hide"); $("ci-popbg").classList.add("hide");
+    $("ci-more").classList.remove("on"); $("ci-more").setAttribute("aria-expanded", "false");
+  }
+  function openInfoPop() {
+    infoMuteUi();
+    $("ci-pop").classList.remove("hide"); $("ci-popbg").classList.remove("hide");
+    $("ci-more").classList.add("on"); $("ci-more").setAttribute("aria-expanded", "true");
+  }
+  function infoMuteUi() {
+    var m = !!ch && isMuted(ch.room, ch.uid);
+    $("ci-mute").classList.toggle("muted", m); $("ci-mute-l").textContent = m ? "Unmute" : "Mute";
+    $("ci-mute").setAttribute("aria-pressed", m ? "true" : "false");
+    $("ci-pmute").classList.toggle("muted", m); $("ci-pmute-l").textContent = m ? "Unmute" : "Mute";
+  }
+  function n0(n) { n = Number(n) || 0; try { return n.toLocaleString("en-US"); } catch (e) { return String(n); } }
+  function countLine(d) {
+    var t = Number(d.total) || 0, s = n0(t) + (t === 1 ? " member" : " members");
+    if (d.online != null && Number(d.online) > 0) s += ", " + n0(d.online) + " online";
+    return s;
+  }
+  // "online" / "last seen at 14:05" / "last seen yesterday at 9:30" / "last seen 3 Nov" / "last seen recently"
+  function seenText(m) {
+    if (!m) return "last seen recently";
+    if (m.mine || m.online) return "online";
+    var d = m.seen ? new Date(m.seen) : null;
+    if (!d || isNaN(d)) return "last seen recently";
+    var now = new Date(), y = new Date(now.getTime() - 864e5);
+    if (sameDay(d, now)) return "last seen at " + hhmm(d);
+    if (sameDay(d, y)) return "last seen yesterday at " + hhmm(d);
+    var o = { day: "numeric", month: "short" }; if (d.getFullYear() !== now.getFullYear()) o.year = "numeric";
+    return "last seen " + d.toLocaleDateString("en-GB", o);
+  }
+  function infoAvatar(o) {
+    var a;
+    if (o.kind === "group") { a = el("span", "av iav", "💬"); a.style.background = "#3d8bd9"; }
+    else if (o.kind === "support") { a = el("span", "av iav", "🆘"); a.style.background = "#e5534b"; }
+    else a = avatar(ch.info.photo, ch.info.title, ch.info.seed, "av iav");
+    a.id = "ci-av";
+    var old = $("ci-av"); old.parentNode.replaceChild(a, old);
+  }
+  function openInfo() {
+    if (!ch || srch.on || screens[screens.length - 1] !== "v-chat") return;
+    closePop(); emoShow(false);
+    var kind = ch.room === "public" ? "group" : (ch.uid ? "user" : "support");
+    info = { kind: kind, tab: "m", ch: ch };
+    infoAvatar(info);
+    $("ci-name").textContent = kind === "group" ? "Group City Chat" : kind === "support" ? "Group City Support" : (ch.info.title || "User");
+    $("ci-sub").textContent = kind === "group" ? (memFresh(true) ? countLine(memCache.d) : "Everyone on Group City") : kind === "support" ? "Support" : "last seen recently";
+    $("ci-sub").classList.remove("on");
+    $("ci-tabs").classList.toggle("hide", kind !== "group");
+    $("ci-members").classList.toggle("hide", kind !== "group");
+    $("ci-links").classList.add("hide");
+    $("ci-about").classList.toggle("hide", kind !== "user");
+    infoTab("m", true);
+    infoMuteUi(); closeInfoPop();
+    $("ci-body").scrollTop = 0;
+    openScreen("v-info");
+    if (kind === "group") loadMembers(false);
+    if (kind === "user") { renderAbout(null); loadUserInfo(); }
+  }
+  function memFresh(any) { var o = cacheOwner(); return !!(memCache && memCache.o === o && (any || Date.now() - memCache.t < MEMBERS_TTL)); }
+  function loadMembers(force) {
+    var box = $("ci-members");
+    if (memFresh(true)) renderMembers(memCache.d);
+    else { box.textContent = ""; box.appendChild(smallLoader()); }
+    if (!force && memFresh(false)) return;            // cached for 60 s
+    if (infoBusy.m) return; infoBusy.m = true;
+    var my = info, owner = cacheOwner();
+    chatApi("/api/chat?view=members").then(function (d) {
+      infoBusy.m = false;
+      if (d._status === 401) { if (info === my) { closeAllScreens(); chatExpired(); } return; }
+      if (!d.ok) { if (info === my && !memFresh(true)) { box.textContent = ""; box.appendChild(el("div", "iempty", d.message || "Couldn't load members.")); } return; }
+      memCache = { o: owner, t: Date.now(), d: d };
+      if (info === my && info.kind === "group") { renderMembers(d); $("ci-sub").textContent = countLine(d); }
+    }).catch(function () {
+      infoBusy.m = false;
+      if (info === my && !memFresh(true)) { box.textContent = ""; box.appendChild(el("div", "iempty", "Couldn't connect. Check your connection.")); }
+    });
+  }
+  function memberSort(a, b) {
+    if (!!a.admin !== !!b.admin) return a.admin ? -1 : 1;
+    var oa = !!(a.online || a.mine), ob = !!(b.online || b.mine);
+    if (oa !== ob) return oa ? -1 : 1;
+    return (b.seen ? Date.parse(b.seen) : 0) - (a.seen ? Date.parse(a.seen) : 0);
+  }
+  function renderMembers(d) {
+    var box = $("ci-members"); box.textContent = "";
+    var ms = (Array.isArray(d.members) ? d.members : []).filter(function (m) { return m && typeof m === "object"; }).slice().sort(memberSort);
+    if (!ms.length) { box.appendChild(el("div", "iempty", "No members yet")); return; }
+    ms.forEach(function (m) {
+      var row = el("div", "irow");
+      row.appendChild(avatar(m.photo, m.name, m.u, "av imav"));
+      var tx = el("div", "itx"), top = el("div", "itop");
+      top.appendChild(el("span", "inm", m.name || "User"));
+      if (m.admin) top.appendChild(el("span", "iadm", "Admin"));
+      tx.appendChild(top);
+      var st = seenText(m);
+      tx.appendChild(el("div", "ist" + (st === "online" ? " on" : ""), st));
+      row.appendChild(tx);
+      box.appendChild(row);
+    });
+    if (d.more) box.appendChild(el("div", "ifoot", "Showing the " + ms.length + " most recently active members"));
+  }
+  // links posted in the public chat: this device's messages (open chat + cache) plus the server's last 50 link messages
+  var LINK_RE = /(https?:\/\/[^\s<>"]+|(?:^|[^\w.\/@])(?:t\.me|telegram\.me)\/[^\s<>"]+)/g;
+  function msgLinks(text) {
+    var out = [], mt; text = String(text || ""); LINK_RE.lastIndex = 0;
+    while ((mt = LINK_RE.exec(text))) {
+      var raw = mt[0];
+      if (raw[0] !== "h" && raw[0] !== "t") raw = raw.slice(1);
+      var shown = raw.replace(/[.,!?:;)\]}'"]+$/, "");
+      var url = /^https?:\/\//i.test(shown) ? shown.replace(/^http:\/\//i, "https://") : "https://" + shown;
+      if (safeUrl(url) && out.every(function (x) { return x.url !== url; })) out.push({ url: url, shown: shown });
+    }
+    return out;
+  }
+  function linkItems() {
+    var byId = {};
+    var add = function (m) { if (m && Number(m.id) > 0 && !m.pend && !byId[m.id]) byId[m.id] = m; };
+    if (linkCache && linkCache.o === cacheOwner()) (linkCache.ms || []).forEach(add);
+    (readCache("public") || []).forEach(add);
+    if (info && info.ch && info.ch.room === "public") info.ch.msgs.forEach(add);
+    var items = [];
+    Object.keys(byId).map(function (k) { return byId[k]; }).sort(function (a, b) { return b.id - a.id; }).forEach(function (m) {
+      msgLinks(m.text).forEach(function (l) { items.push({ url: l.url, shown: l.shown, name: m.mine ? "You" : (m.name || "User"), at: m.at, id: m.id }); });
+    });
+    return items;
+  }
+  function linkDate(d) {      // "14:05" today, else "3 Nov" (+ year when not this year)
+    var now = new Date(); if (sameDay(d, now)) return hhmm(d);
+    var o = { day: "numeric", month: "short" }; if (d.getFullYear() !== now.getFullYear()) o.year = "numeric";
+    return d.toLocaleDateString("en-GB", o);
+  }
+  function linkHost(u) { var m = /^https:\/\/([^\/?#]+)/i.exec(u); return m ? m[1].replace(/^www\./i, "").toLowerCase() : ""; }
+  function renderLinks() {
+    var box = $("ci-links"); box.textContent = "";
+    var items = linkItems();
+    if (!items.length) {
+      if (infoBusy.l) box.appendChild(smallLoader());
+      else { var e = el("div", "iempty"); e.appendChild(el("b", null, "No links yet")); e.appendChild(document.createTextNode("Links posted in Group City Chat show here.")); box.appendChild(e); }
+      return;
+    }
+    items.forEach(function (it) {
+      var row = el("button", "irow ilink"); row.type = "button";
+      var host = linkHost(it.url), tile = el("span", "av imav itile", letter(host === "t.me" || host === "telegram.me" ? it.url.replace(/^https:\/\/[^\/]+\/\+?/, "") : host));
+      tile.style.background = color(host || it.url);
+      row.appendChild(tile);
+      var tx = el("span", "itx");
+      tx.appendChild(el("span", "ilk", it.shown));
+      var d = new Date(it.at);
+      tx.appendChild(el("span", "ist", it.name + (isNaN(d) ? "" : " · " + linkDate(d))));
+      row.appendChild(tx);
+      (function (u) { row.onclick = function () { open(u); }; })(it.url);
+      box.appendChild(row);
+    });
+  }
+  function loadLinks() {
+    renderLinks();
+    if (linkCache && linkCache.o === cacheOwner() && Date.now() - linkCache.t < MEMBERS_TTL) return;
+    if (infoBusy.l) return; infoBusy.l = true;
+    var my = info, owner = cacheOwner();
+    chatApi("/api/chat?view=links").then(function (d) {
+      infoBusy.l = false;
+      if (d._status === 401) { if (info === my) { closeAllScreens(); chatExpired(); } return; }
+      if (d.ok) linkCache = { o: owner, t: Date.now(), ms: Array.isArray(d.messages) ? d.messages : [] };
+      if (info === my && info.tab === "l") renderLinks();
+    }).catch(function () { infoBusy.l = false; if (info === my && info.tab === "l") renderLinks(); });
+  }
+  function infoTab(t, quiet) {
+    if (info) info.tab = t;
+    $("ci-tab-m").classList.toggle("on", t === "m"); $("ci-tab-m").setAttribute("aria-selected", t === "m" ? "true" : "false");
+    $("ci-tab-l").classList.toggle("on", t === "l"); $("ci-tab-l").setAttribute("aria-selected", t === "l" ? "true" : "false");
+    if (!info || info.kind !== "group") return;
+    $("ci-members").classList.toggle("hide", t !== "m");
+    $("ci-links").classList.toggle("hide", t !== "l");
+    if (quiet) return;
+    if (t === "l") loadLinks(); else loadMembers(false);
+  }
+  // admin: one user's info for their support thread
+  function aboutRow(box, value, label) { var r = el("div", "iarow"); r.appendChild(el("div", "iav1", value)); r.appendChild(el("div", "ial", label)); box.appendChild(r); }
+  function renderAbout(m) {
+    var box = $("ci-about"); box.textContent = "";
+    var uname = (m && m.username) || (ch && ch.info.username) || "";
+    if (uname) aboutRow(box, "@" + uname, "Username");
+    aboutRow(box, (m && m.uid) || (ch && ch.uid) || "", "User ID");
+    if (m) { var st = seenText(m); $("ci-sub").textContent = st; $("ci-sub").classList.toggle("on", st === "online"); }
+  }
+  function loadUserInfo() {
+    if (infoBusy.u || !ch || !ch.uid) return; infoBusy.u = true;
+    var my = info;
+    chatApi("/api/chat?view=member&uid=" + encodeURIComponent(ch.uid)).then(function (d) {
+      infoBusy.u = false;
+      if (d._status === 401) { if (info === my) { closeAllScreens(); chatExpired(); } return; }
+      if (info === my && d.ok && d.member) renderAbout(d.member);
+    }).catch(function () { infoBusy.u = false; });
+  }
+  $("ch-pill").onclick = function () { openInfo(); };
+  $("ch-pill").addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openInfo(); } });
+  $("ci-back").onclick = goBack;
+  $("ci-msg").onclick = goBack;                                   // Message = back to the chat
+  $("ci-mute").onclick = function () { toggleMute(); };
+  function infoSearch() { closeInfoPop(); if (screens[screens.length - 1] === "v-info") goBack(); if (screens[screens.length - 1] === "v-chat") openSearch(); }
+  $("ci-find").onclick = infoSearch;
+  $("ci-more").onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); if (infoPopOpen()) closeInfoPop(); else openInfoPop(); };
+  $("ci-popbg").onclick = closeInfoPop;
+  $("ci-pmute").onclick = function () { toggleMute(); closeInfoPop(); };
+  $("ci-pfind").onclick = infoSearch;
+  $("ci-tab-m").onclick = function () { infoTab("m"); };
+  $("ci-tab-l").onclick = function () { infoTab("l"); };
 
   // ---------- in-chat search: highlights matches in the loaded messages, ▲/▼ walk them (newest first) ----------
   function escRe(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
@@ -1137,6 +1360,7 @@
   $("ch-sup").onclick = function () { searchGo(srch.cur - 1); };      // older
   $("ch-sdown").onclick = function () { searchGo(srch.cur + 1); };    // newer
   document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && screens[screens.length - 1] === "v-info") { goBack(); return; }
     if (e.key !== "Escape" || screens[screens.length - 1] !== "v-chat") return;
     if (popOpen()) closePop(); else if (srch.on && document.activeElement !== $("ch-q")) closeSearch();
   });

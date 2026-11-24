@@ -355,3 +355,57 @@ html.dark mark.hl.cur{background:#ffb627;color:#000;box-shadow:0 0 0 2px #ffb627
 /* unread badge on the bottom-nav Messages icon */
 .nav i{position:relative}
 .nbadge{position:absolute;top:-4px;left:16px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--btn);color:var(--btnt);font-size:11px;font-weight:700;font-style:normal;line-height:18px;text-align:center;box-shadow:0 0 0 2px var(--navbg)}
+/* ---------- Chat info (tap the chat header pill) — Telegram Android group / user info ---------- */
+.cpill.tap{cursor:pointer;border:0;font:inherit;color:inherit;text-align:left}
+.cpill.tap:active{background:color-mix(in srgb,var(--floatbg) 90%,var(--text))}
+.cpill.tap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+html .screen.info,html.dark .screen.info{background:var(--sec);background-image:none;z-index:16;animation:islide .22s cubic-bezier(.2,.8,.3,1)}
+@keyframes islide{from{transform:translateX(100%)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){html .screen.info{animation:none}}
+.ihead{position:absolute;top:0;left:0;right:0;z-index:2;display:flex;align-items:center;gap:8px;padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top));pointer-events:none}
+.ihead>*{pointer-events:auto}
+.ihsp{flex:1;pointer-events:none}
+.ibody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:calc(20px + env(safe-area-inset-top)) 12px calc(20px + env(safe-area-inset-bottom))}
+.ihero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:4px 40px 18px}
+.iav{width:104px;height:104px;font-size:44px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+.iname{margin-top:14px;font-size:23px;font-weight:600;letter-spacing:-.2px;line-height:1.2;max-width:100%;overflow-wrap:anywhere}
+.isub{margin-top:4px;font-size:15px;color:var(--hint)}
+.isub.on{color:var(--accent)}
+.iacts{display:flex;gap:8px;margin:2px 0 14px}
+.iact{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px 9px;border:0;border-radius:16px;background:var(--card);color:var(--text);font:inherit;font-size:13.5px;font-weight:500;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.iact:active{background:color-mix(in srgb,var(--card) 88%,var(--text))}
+@media (hover:hover){.iact:hover{background:color-mix(in srgb,var(--card) 94%,var(--text))}}
+.iact svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.iact span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+#ci-mute .ic-off,#ci-pmute .ic-off{display:none}
+#ci-mute.muted .ic-off,#ci-pmute.muted .ic-off{display:block}
+#ci-mute.muted .ic-on,#ci-pmute.muted .ic-on{display:none}
+.icard{background:var(--card);border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.iabout{padding:4px 0;margin-bottom:12px}
+.iarow{padding:9px 18px}
+.iarow+.iarow{border-top:1px solid var(--sep)}
+.iav1{font-size:16px;color:var(--text);overflow-wrap:anywhere}
+.ial{font-size:13px;color:var(--hint);margin-top:2px}
+.itabs{display:flex;gap:4px;width:max-content;max-width:100%;margin:2px auto 12px;padding:4px;border-radius:22px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.itabs button{border:0;background:none;color:var(--hint);font:inherit;font-size:15px;font-weight:600;padding:7px 18px;border-radius:18px;cursor:pointer}
+.itabs button.on{background:var(--pillbg);color:var(--accent)}
+.ilist{padding:4px 0}
+.irow{display:flex;align-items:center;gap:14px;width:100%;padding:0 14px 0 16px;min-height:66px;background:none;border:0;color:var(--text);font:inherit;text-align:left}
+button.irow{cursor:pointer}
+button.irow:active{background:var(--soft)}
+.imav{width:46px;height:46px;font-size:18px;overflow:hidden;background-image:none}
+.itx{flex:1;min-width:0;align-self:stretch;display:flex;flex-direction:column;justify-content:center;padding:9px 0;border-bottom:1px solid var(--sep)}
+.irow:last-child .itx,.irow:nth-last-child(2):has(+.ifoot) .itx{border-bottom-color:transparent}
+.itop{display:flex;align-items:center;gap:8px;min-width:0}
+.inm{flex:1;min-width:0;font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iadm{flex:none;font-size:13px;font-weight:500;color:var(--accent);background:var(--pillbg);border-radius:10px;padding:2px 9px}
+.ist{display:block;margin-top:2px;font-size:14px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ist.on{color:var(--accent)}
+.ilk{display:block;font-size:15.5px;color:#168acd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html.dark .ilk{color:#6ab3f3}
+.itile{border-radius:12px;font-size:19px}
+.iempty{padding:26px 20px;text-align:center;color:var(--hint);font-size:14px;line-height:1.45}
+.iempty b{display:block;color:var(--text);font-size:15px;font-weight:600;margin-bottom:3px}
+.ifoot{padding:10px 16px 8px;font-size:13px;color:var(--hint);text-align:center}
+.ilist .cload{margin:18px auto}
+#ci-pop{top:calc(58px + env(safe-area-inset-top))}

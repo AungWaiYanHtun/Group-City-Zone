@@ -128,7 +128,7 @@
 <!-- Chat -->
 <section id="v-chat" class="screen hide">
   <div class="chead"><button class="back" id="ch-back" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5.5 4.5 12l6.5 6.5"/></svg></button>
-    <div class="cpill"><span class="av cav" id="ch-av"></span>
+    <div class="cpill tap" id="ch-pill" role="button" tabindex="0" aria-label="Chat info"><span class="av cav" id="ch-av"></span>
     <div class="ct"><div class="ctrow"><div class="ctitle" id="ch-title"></div><span class="mutei hide" id="ch-muted" role="img" aria-label="Muted"></span></div><div class="csub" id="ch-sub"></div></div></div>
     <button class="cmore" id="ch-more" type="button" aria-label="More" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
     <button class="back hide" id="ch-sback" type="button" aria-label="Close search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5.5 4.5 12l6.5 6.5"/></svg></button>
@@ -151,6 +151,37 @@
     <button class="csnav" id="ch-sup" type="button" aria-label="Older match"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
     <button class="csnav" id="ch-sdown" type="button" aria-label="Newer match"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div>
   <div class="emopanel hide" id="ch-emop"><div class="emotabs" id="ch-emot"></div><div class="emogrid" id="ch-emog"></div></div>
+</section>
+
+<!-- Chat info (Telegram-style group / support / user info), opened by tapping the chat header pill -->
+<section id="v-info" class="screen info hide" aria-label="Chat info">
+  <div class="ihead">
+    <button class="back" id="ci-back" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5.5 4.5 12l6.5 6.5"/></svg></button>
+    <span class="ihsp"></span>
+    <button class="cmore" id="ci-more" type="button" aria-label="More" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
+  </div>
+  <div class="ibody" id="ci-body">
+    <div class="ihero">
+      <span class="av iav" id="ci-av"></span>
+      <div class="iname" id="ci-name"></div>
+      <div class="isub" id="ci-sub"></div>
+    </div>
+    <div class="iacts">
+      <button class="iact" id="ci-msg" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6c-4.9 0-8.6 3.4-8.6 7.8 0 1.9.7 3.6 1.9 5L4.6 20l4-1.3c1.1.4 2.2.6 3.4.6 4.9 0 8.6-3.4 8.6-7.9S16.9 3.6 12 3.6z"/></svg><span>Message</span></button>
+      <button class="iact" id="ci-mute" type="button"><svg class="ic-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 1.8H4.4z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg><svg class="ic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5.9A6 6 0 0 1 18 11v4.2M6 9.6v6.9l-1.6 1.8H16"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/><path d="M3.5 3.5l17 17"/></svg><span id="ci-mute-l">Mute</span></button>
+      <button class="iact" id="ci-find" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><span>Search</span></button>
+    </div>
+    <div class="icard iabout hide" id="ci-about"></div>
+    <div class="itabs hide" id="ci-tabs" role="tablist"><button class="on" id="ci-tab-m" type="button" role="tab" aria-selected="true">Members</button><button id="ci-tab-l" type="button" role="tab" aria-selected="false">Links</button></div>
+    <div class="icard ilist hide" id="ci-members"></div>
+    <div class="icard ilist hide" id="ci-links"></div>
+  </div>
+  <div class="cpopbg hide" id="ci-popbg"></div>
+  <div class="cpop hide" id="ci-pop" role="menu">
+    <button class="cpop-b" id="ci-pmute" type="button" role="menuitem"><svg class="ic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9.5a3.6 3.6 0 0 1 .9 4.6M18.3 7a7.2 7.2 0 0 1 1 9.4"/><path d="M3.5 3.5l17 17"/></svg><svg class="ic-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6M18.3 6.6a7.6 7.6 0 0 1 0 10.8"/></svg><span id="ci-pmute-l">Mute</span></button>
+    <div class="cpop-sep"></div>
+    <button class="cpop-b" id="ci-pfind" type="button" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><span>Search</span></button>
+  </div>
 </section>
 
 <!-- Message menu -->
