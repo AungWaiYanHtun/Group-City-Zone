@@ -6,6 +6,8 @@
 // GET  /api/profile?u=<user hash>   another user's public profile {u, name, first_name, last_name, bio, photo, v}
 //                                   (`u` is the opaque hash chat messages carry; profile null when they never saved one)
 // GET  /api/profile?uid=<user id>   admins only: the same by Telegram id
+// GET  /api/profile?tid=<user id>   any logged-in user: {name, photo, v} only (no bio) — the Stars Send screen shows the
+//                                   recipient's Group City name/photo once the worker found them by @username or ID
 // POST /api/profile {first_name, last_name, bio, photo?}
 //      first_name 1-64, last_name 0-64, bio 0-70 characters;
 //      photo: omitted = keep, "" = remove, "data:image/jpeg;base64,..." (real JPEG, ≤ 120 KB) = new photo
@@ -72,6 +74,15 @@ module.exports = async (req, res) => {
 
     if (req.method === "GET") {
       const q = L.query(req);
+      if (q.tid !== undefined) {
+        const tid = String(q.tid || "");
+        if (!/^\d{1,20}$/.test(tid)) return L.fail(res, 400, "Bad user.");
+        const got = await readOne("user_id=eq." + tid);
+        const r = got.row;
+        if (!r || !String(r.first_name || "").trim()) return L.json(res, 200, { ok: true, profile: null });
+        const o = out(r);
+        return L.json(res, 200, { ok: true, profile: { name: L.displayName(r), photo: o.photo, v: o.v } });
+      }
       if (q.u !== undefined || q.uid !== undefined) {
         let filter, uid = "";
         if (q.uid !== undefined) {
