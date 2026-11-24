@@ -722,3 +722,10 @@ html.dark #st-main .stcirc{background:rgba(255,255,255,.08)}
 .drt{margin-top:12px;font-size:19px;font-weight:700}
 .drs{margin-top:6px;font-size:14px;color:var(--hint)}
 .stok{display:block;width:calc(100% - 32px);margin:16px auto 8px;height:46px;border:0;border-radius:12px;background:var(--btn);color:var(--btnt);font:inherit;font-size:16px;font-weight:600;cursor:pointer}
+.drdots{display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:6px 20px 0}
+.drdot{width:16px;height:16px;border-radius:50%;background:color-mix(in srgb,var(--hint) 30%,transparent)}
+.drdot.on{background:linear-gradient(#ffd34e,#f5a623);box-shadow:0 0 6px rgba(245,166,35,.5)}
+.drcount{text-align:center;margin-top:8px;font-size:14px;font-weight:600;color:var(--hint);font-variant-numeric:tabular-nums}
+#st-drop .msg{margin:10px 16px 0}
+.drgo:disabled{opacity:.55}
+#st-drop .note{padding:4px 18px 16px;text-align:center}

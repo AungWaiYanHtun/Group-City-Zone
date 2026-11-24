@@ -742,13 +742,87 @@
     return true;
   }
 
+  // ---------- wallet: Airdrop (Adsgram Reward ads → Stars; the worker counts and limits) ----------
+  var AD_BLOCK = String((window.GC_CONFIG && GC_CONFIG.ADSGRAM_BLOCK_ID) || "").trim();
+  var drop = { st: null, busy: false, timer: 0, ctl: null, sdk: null };
+  function drMsg(t, kind) { var m = $("dr-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = t || ""; if (!t) m.classList.add("hide"); }
+  function loadAdSdk() {
+    if (window.Adsgram) return Promise.resolve(window.Adsgram);
+    if (drop.sdk) return drop.sdk;
+    drop.sdk = new Promise(function (ok, no) {
+      var sc = document.createElement("script"); sc.src = "https://sad.adsgram.ai/js/sad.min.js"; sc.async = true;
+      sc.onload = function () { window.Adsgram ? ok(window.Adsgram) : no(new Error("sdk")); };
+      sc.onerror = function () { drop.sdk = null; no(new Error("sdk")); };
+      document.head.appendChild(sc);
+    });
+    return drop.sdk;
+  }
+  function drRender() {
+    var st = drop.st, go = $("dr-go"), dots = $("dr-dots");
+    clearTimeout(drop.timer); dots.textContent = "";
+    if (!AD_BLOCK) { $("dr-t").textContent = "Airdrop is coming soon"; $("dr-s").textContent = "Free Stars for Group City members. Stay tuned!"; go.classList.add("hide"); $("dr-count").textContent = ""; return; }
+    go.classList.remove("hide");
+    if (!inTg) { $("dr-s").textContent = "Open Group City in Telegram to watch ads and earn Stars."; go.disabled = true; go.textContent = "Watch ad"; return; }
+    if (!st) { $("dr-s").textContent = "Loading…"; go.disabled = true; return; }
+    $("dr-t").textContent = "Watch ads, earn Stars";
+    $("dr-s").textContent = "+" + st.per + " ⭐ for each ad · up to " + (st.per * st.limit) + " ⭐ a day";
+    for (var i = 0; i < st.limit; i++) dots.appendChild(el("span", "drdot" + (i < st.done ? " on" : "")));
+    $("dr-count").textContent = st.done + " / " + st.limit + " today";
+    var left = st.next_at ? st.next_at - Date.now() : 0;
+    if (st.done >= st.limit) { go.disabled = true; go.textContent = "Come back tomorrow"; return; }
+    if (drop.busy) { go.disabled = true; go.textContent = "Loading ad…"; return; }
+    if (left > 0) { go.disabled = true; go.textContent = "Next ad in " + Math.ceil(left / 1000) + "s"; drop.timer = setTimeout(drRender, 1000); return; }
+    go.disabled = false; go.textContent = "Watch ad  +" + st.per + " ⭐";
+  }
+  function drStatus() {
+    var req = starsReq("airdrop");
+    if (!req) return;
+    req.then(function (d) {
+      if (starsAuthLost(d)) return;
+      if (!d.ok) { drMsg(d.message || "Airdrop is not available right now.", "err"); return; }
+      drop.st = d; if (typeof d.balance === "number") setBal(d.balance); drRender();
+    }).catch(function () { drMsg("Couldn't connect. Check your connection.", "err"); });
+  }
+  function openDrop() {
+    stOnly("st-drop"); drMsg(""); drop.st = null; drRender();
+    if (!AD_BLOCK || !inTg) return;
+    drStatus(); loadAdSdk().catch(function () {});
+  }
+  function watchAd() {
+    var st = drop.st;
+    if (!st || drop.busy || !AD_BLOCK || !inTg || st.done >= st.limit) return;
+    drop.busy = true; drMsg(""); drRender();
+    loadAdSdk().then(function (A) {
+      if (!drop.ctl) drop.ctl = A.init({ blockId: AD_BLOCK });
+      return drop.ctl.show();
+    }).then(function (r) {
+      if (!r || !r.done) throw r || {};
+      var req = starsReq("adreward");
+      if (!req) throw { description: "login" };
+      return req.then(function (d) {
+        drop.busy = false;
+        if (starsAuthLost(d)) return;
+        if (typeof d.balance === "number") setBal(d.balance);
+        if (d.limit) drop.st = { done: d.done, limit: d.limit, per: d.per, next_at: d.next_at };
+        if (d.ok) { drMsg("+" + d.added + " ⭐ added to your balance!", "okm"); try { tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success"); } catch (e) {} }
+        else drMsg(d.message || "Couldn't add Stars. Please try again.", "err");
+        drRender();
+      });
+    }).catch(function (r) {
+      drop.busy = false;
+      var why = r && r.description ? String(r.description) : "";
+      drMsg(/skip|close/i.test(why) ? "Watch the ad till the end to get Stars." : (why === "login" ? "Please log in again." : "No ad available right now. Try again later."), "err");
+      drRender();
+    });
+  }
+
   // ---------- wallet: History ----------
   function hDate(ts) {
     var d = new Date(Number(ts) || 0), M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     return M[d.getMonth()] + " " + d.getDate() + (d.getFullYear() !== new Date().getFullYear() ? ", " + d.getFullYear() : "") + " · " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
   }
   function peerLabel(p) { return p ? (p.username ? "@" + p.username : String(p.name || ("User " + p.id))) : "someone"; }
-  var H_ICON = { topup: "M12 5v14M5 12h14", promote: "M4 10v4h3l6 4V6L7 10zM16.5 9a4 4 0 010 6", promote_refund: "M9 14 4 9l5-5M4 9h11a5 5 0 010 10h-2", refund: "M9 14 4 9l5-5M4 9h11a5 5 0 010 10h-2", refund_undo: "M15 14l5-5-5-5M20 9H9a5 5 0 000 10h2", other: "M12 7v5l3 2" };
+  var H_ICON = { topup: "M12 5v14M5 12h14", promote: "M4 10v4h3l6 4V6L7 10zM16.5 9a4 4 0 010 6", promote_refund: "M9 14 4 9l5-5M4 9h11a5 5 0 010 10h-2", refund: "M9 14 4 9l5-5M4 9h11a5 5 0 010 10h-2", refund_undo: "M15 14l5-5-5-5M20 9H9a5 5 0 000 10h2", airdrop: "M3.5 10.5a8.5 7 0 0117 0M3.5 10.5 10 17M20.5 10.5 14 17M12 10.5V17M9.5 17h5v4h-5z", other: "M12 7v5l3 2" };
   function hIcon(type) {
     var ns = "http://www.w3.org/2000/svg", w = el("span", "hic hic-" + type);
     var sv = document.createElementNS ? document.createElementNS(ns, "svg") : el("svg"); sv.setAttribute("viewBox", "0 0 24 24"); sv.setAttribute("aria-hidden", "true");
@@ -764,6 +838,7 @@
       case "refund_undo": return "Refund cancelled · Stars back";
       case "sent": return "Sent to " + peerLabel(it.peer);
       case "received": return "Received from " + peerLabel(it.peer);
+      case "airdrop": return "Airdrop · watched ad";
     }
     return "Balance change";
   }
@@ -2659,8 +2734,8 @@
   $("st-back").onclick = stBack;
   $("st-a-send").onclick = function () { sdReset(""); stOnly("st-send"); };
   $("st-a-recv").onclick = function () { stOnly("st-recv"); rcMsg("", ""); renderRecv(); };
-  $("st-a-drop").onclick = function () { stOnly("st-drop"); };
-  $("dr-ok").onclick = function () { stOnly("st-main"); };
+  $("st-a-drop").onclick = openDrop;
+  $("dr-go").onclick = watchAd;
   $("st-a-buy").onclick = function () { stars.need = 0; stars.pick = 0; stMsg("", ""); stOnly("st-body"); renderPacks(); };
   $("sd-to").addEventListener("input", function () { sdLookup(false); });
   $("sd-to").addEventListener("change", function () { sdLookup(true); });

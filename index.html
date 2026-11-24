@@ -105,10 +105,14 @@
       <div class="sthist" id="st-hist" role="list" aria-label="Stars history"></div>
       <div class="stlinks"><button class="link inline" id="st-help" type="button">Payment help</button><span aria-hidden="true">·</span><button class="link inline" id="st-terms-l" type="button">Terms</button></div>
     </div>
-    <!-- Airdrop (coming soon) -->
+    <!-- Airdrop: watch Adsgram rewarded ads for Stars (daily limit, checked by the worker) -->
     <div id="st-drop" class="hide">
-      <div class="drhero"><div class="drico" aria-hidden="true">🪂</div><div class="drt">Airdrop is coming soon</div><div class="drs">Free Stars events for active Group City members. Stay tuned!</div></div>
-      <button class="stok" id="dr-ok" type="button">OK</button>
+      <div class="drhero"><div class="drico" aria-hidden="true">🪂</div><div class="drt" id="dr-t">Watch ads, earn Stars</div><div class="drs" id="dr-s">Loading…</div></div>
+      <div class="drdots" id="dr-dots" aria-hidden="true"></div>
+      <div class="drcount" id="dr-count"></div>
+      <div class="msg hide" id="dr-msg"></div>
+      <button class="stok drgo" id="dr-go" type="button" disabled>Watch ad</button>
+      <div class="note">Watch an ad till the end to get Stars. Stars are added to your Group City balance. The limit resets every day at 00:00 (Myanmar time).</div>
     </div>
     <!-- Buy: top-up packs (id st-body kept from v12) -->
     <div id="st-body" class="hide">
