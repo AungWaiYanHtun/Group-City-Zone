@@ -518,27 +518,36 @@
   var SEENKEY = "gc_seen_public", lastSum = null, unread = { at: "", n: 0 };
   function getSeen() { try { return Number(localStorage.getItem(SEENKEY)) || 0; } catch (e) { return 0; } }
   function setSeen(id) { id = Number(id) || 0; if (id > getSeen()) { try { localStorage.setItem(SEENKEY, String(id)); } catch (e) {} } }
-  function showUnread(n) {
-    n = isMuted("public") ? 0 : n;
-    var t = n > 99 ? "99+" : String(n);
-    var b = $("pub-badge"); b.className = "cbadge" + (n ? "" : " hide"); b.textContent = n ? t : "";
-    var nb = $("nav-msg-badge"); nb.classList.toggle("hide", !n); nb.textContent = n ? t : "";
+  // Telegram-style counts: the row always shows the count (green when unmuted, grey when muted) and the time turns
+  // green for unmuted unread; the bottom-nav Messages badge counts unmuted unread only.
+  function badgeText(n, capped) { return capped ? n + "+" : String(n); }
+  function setCount(badge, time, n, muted, capped) {
+    badge.className = "cbadge " + (muted ? "muted" : "unm") + (n ? "" : " hide");
+    badge.textContent = n ? badgeText(n, capped) : "";
+    if (time) time.classList.toggle("unread", !!n && !muted);
+  }
+  function showUnread(n, capped) {
+    var muted = isMuted("public");
+    setCount($("pub-badge"), $("pub-time"), n, muted, capped);
+    var u = muted ? 0 : n;
+    var nb = $("nav-msg-badge"); nb.classList.toggle("hide", !u); nb.textContent = u ? badgeText(u, capped) : "";
   }
   function countUnread(p) {
     if (!p || !p.id) { showUnread(0); return; }
     var seen = getSeen();
     if (!seen) { setSeen(p.id); showUnread(0); return; }          // first run on this device: history counts as read
     var ukey = p.id + ":" + seen;
-    if (p.id <= seen || isMuted("public")) { unread = { at: ukey, n: 0 }; showUnread(0); return; }
-    if (unread.at === ukey) { showUnread(unread.n); return; }
+    if (p.id <= seen) { unread = { at: ukey, n: 0 }; showUnread(0); return; }
+    if (unread.at === ukey) { showUnread(unread.n, unread.capped); return; }
     chatApi("/api/chat?room=public&after=" + encodeURIComponent(seen)).then(function (d) {
       if (!d || !d.ok) return;
       var ms = Array.isArray(d.messages) ? d.messages : [];
       var n = ms.filter(function (m) { return m && !m.mine && m.id > getSeen(); }).length;
-      if (ms.length >= 100 && n) n = 100;
-      unread = { at: ukey, n: n };
-      if (screens[screens.length - 1] === "v-chat" && ch && ch.room === "public") n = 0;
-      showUnread(n);
+      var capped = ms.length >= 100 && n > 0;
+      if (capped) n = 100;
+      unread = { at: ukey, n: n, capped: capped };
+      if (screens[screens.length - 1] === "v-chat" && ch && ch.room === "public") { n = 0; capped = false; }
+      showUnread(n, capped);
     }).catch(function () {});
   }
   function loadSummary(quiet) {
@@ -555,15 +564,14 @@
         if (np || ns) haptic();
       }
       lastSum = { pub: d.public ? Number(d.public.id) || 0 : 0, sup: d.support ? Number(d.support.id) || 0 : 0 };
-      countUnread(d.public); muteIcons();
       var p = d.public, s = d.support;
       $("pub-prev").textContent = p ? preview(p, p.name) : "Chat with everyone";
       $("pub-time").textContent = p ? listTime(p.at) : "";
+      countUnread(d.public); muteIcons();
       $("sup-prev").textContent = s ? preview(s, admin ? s.name : (s.mine ? "" : "Support")) : (admin ? "No support messages yet" : "Message the Group City team");
       $("sup-time").textContent = s ? listTime(s.at) : "";
       var badge = $("sup-badge"), n = Number(d.waiting) || 0;
-      badge.classList.toggle("hide", !(admin && n));
-      badge.className = "cbadge" + (admin && n ? "" : " hide"); badge.textContent = n ? String(n) : "";
+      setCount(badge, $("sup-time"), admin ? n : 0, false, false);
     }).catch(function () { if (quiet) return; var m = $("chats-msg"); m.className = "msg err"; m.textContent = "Couldn't connect. Check your connection."; });
   }
   // keeps the Messages list and the unread badge fresh (not while a chat is open: the chat polls itself)
@@ -619,7 +627,8 @@
         if (isMuted("support", String(t.uid))) { var mi = el("span", "mutei"); mi.setAttribute("aria-label", "Muted"); nmw.appendChild(mi); }
         top.appendChild(nmw); top.appendChild(el("span", "ctime", t.last ? listTime(t.last.at) : ""));
         bot.appendChild(el("span", "cprev", t.last ? preview(t.last, t.last.admin ? "Support" : "") : ""));
-        if (t.waiting) bot.appendChild(el("span", "cbadge dot"));
+        var tm = isMuted("support", String(t.uid));
+        if (t.waiting) { bot.appendChild(el("span", "cbadge dot " + (tm ? "muted" : "unm"))); if (!tm) top.lastChild.classList.add("unread"); }
         info.appendChild(top); info.appendChild(bot); row.appendChild(info);
         row.onclick = function () { openChat({ room: "support", uid: String(t.uid), title: t.name, sub: (t.username ? "@" + t.username + " · " : "") + "ID " + t.uid, photo: t.photo, seed: t.u }); };
         box.appendChild(row);
