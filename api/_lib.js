@@ -188,8 +188,89 @@ function missingTable(e, table) {
 }
 const enc = encodeURIComponent;
 
+// ---------- text helpers shared by chat / profile / stories ----------
+function cleanText(v) {
+  if (typeof v !== "string") return "";
+  return v.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "").replace(/\n{4,}/g, "\n\n\n").trim();
+}
+// one line: newlines become spaces, runs of spaces collapse
+function cleanName(v) { return cleanText(typeof v === "string" ? v.replace(/\s*\n\s*/g, " ") : v).replace(/\s{2,}/g, " "); }
+
+// Banned words / phrases (whole words, case-insensitive) for chat messages, profile names / bios and My Day captions.
+// Edit this list as you like.
+const BANNED = [
+  "porn", "xxx", "child porn", "cp links",
+  "cocaine", "heroin", "meth", "mdma", "drugs for sale", "weed for sale",
+  "free money", "double your money", "send crypto", "guaranteed profit", "investment plan"
+];
+const BANNED_RE = BANNED.map((w) => new RegExp("(^|[^\\p{L}\\p{N}])" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+") + "($|[^\\p{L}\\p{N}])", "iu"));
+function hasBanned(text) {
+  const t = String(text).normalize("NFKC");
+  return BANNED_RE.some((re) => re.test(t));
+}
+
+// "data:image/jpeg;base64,..." with a real JPEG inside (FF D8 FF) of at most maxBytes decoded bytes. Returns the url, or null.
+function checkJpeg(v, maxBytes) {
+  if (typeof v !== "string") return null;
+  const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(v);
+  if (!m || m[1].length > Math.ceil(maxBytes / 3) * 4) return null;
+  const buf = Buffer.from(m[1], "base64");
+  if (buf.length < 100 || buf.length > maxBytes || buf[0] !== 0xff || buf[1] !== 0xd8 || buf[2] !== 0xff) return null;
+  return v;
+}
+
+// ---------- users + custom profiles (gc_profiles from supabase_update_v13.sql) ----------
+function displayName(u) {
+  if (!u) return "User";
+  const n = [u.first_name, u.last_name].filter(Boolean).join(" ").trim();
+  return n || (u.username ? "@" + u.username : "User");
+}
+// Until gc_profiles exists every read simply returns no custom profiles (checked again after PROF_RECHECK).
+const PROF_RECHECK = 2 * 60 * 1000;
+const prof = { missingUntil: 0 };
+function profilesMissing() { return Date.now() < prof.missingUntil; }
+function markProfiles(missing) { prof.missingUntil = missing ? Date.now() + PROF_RECHECK : 0; }
+// uid -> {first_name, last_name, updated_at} (no photo: photos are fetched one user at a time and cached by clients)
+async function profilesFor(ids) {
+  ids = Array.from(new Set((ids || []).map(String).filter((x) => /^\d{1,20}$/.test(x))));
+  if (!ids.length || profilesMissing()) return {};
+  try {
+    const rows = (await sb("gc_profiles?select=user_id,first_name,last_name,updated_at&user_id=in.(" + ids.join(",") + ")")) || [];
+    const map = {};
+    rows.forEach((r) => { map[String(r.user_id)] = r; });
+    return map;
+  } catch (e) {
+    if (missingTable(e, "gc_profiles")) markProfiles(true);
+    else console.error("profiles", e && e.message);
+    return {};                                   // never breaks chat
+  }
+}
+// profile version stamp (ms) — clients refetch a user's photo only when it changes
+function profV(p) { const t = p && p.updated_at ? Date.parse(p.updated_at) : NaN; return Number.isFinite(t) ? String(t) : ""; }
+// a gc_users row with the custom name on top (when the user saved one) and pv = the profile version
+function mergeProfile(u, p) {
+  const out = Object.assign({}, u || {});
+  if (p) {
+    if (String(p.first_name || "").trim()) { out.first_name = String(p.first_name); out.last_name = String(p.last_name || ""); }
+    out.pv = profV(p);
+  }
+  return out;
+}
+async function usersById(ids) {
+  ids = Array.from(new Set((ids || []).map(String).filter((x) => /^\d{1,20}$/.test(x))));
+  if (!ids.length) return {};
+  const [rows, profs] = await Promise.all([
+    sb("gc_users?select=id,first_name,last_name,username,photo_url&id=in.(" + ids.join(",") + ")"),
+    profilesFor(ids)
+  ]);
+  const map = {};
+  (rows || []).forEach((r) => { map[String(r.id)] = mergeProfile(r, profs[String(r.id)]); });
+  return map;
+}
+
 module.exports = {
   missingEnv,
   env, json, fail, guard, query, body, verifyInitData, verifyWidget, makeToken, readToken, authUid,
-  isAdmin, adminIds, userHash, configured, sb, enc, cleanUser, missingColumn, missingTable
+  isAdmin, adminIds, userHash, configured, sb, enc, cleanUser, missingColumn, missingTable,
+  cleanText, cleanName, hasBanned, BANNED, checkJpeg, displayName, profilesFor, profV, mergeProfile, usersById, markProfiles, profilesMissing, prof
 };

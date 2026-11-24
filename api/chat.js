@@ -15,6 +15,9 @@
 //      (summary also answers settingsV = the settings version, so clients refetch only when it changed)
 //
 // Non-admins never receive other users' Telegram IDs: each message carries `u` (opaque hash) and `mine`.
+// v13: names come from the user's own profile (gc_profiles, Edit Info) when they saved one; messages / members /
+// threads then also carry `pv` (profile version). Photos are never in these lists: clients fetch /api/profile?u= once
+// per version and cache it.
 // Every authenticated request also stamps gc_users.last_seen (at most once a minute per user) for "online / last seen".
 "use strict";
 const L = require("./_lib");
@@ -58,16 +61,9 @@ async function readSettings() {
   setCache.at = Date.now(); setCache.val = val;
   return val;
 }
-function cleanName(v) { return cleanText(typeof v === "string" ? v.replace(/\s*\n\s*/g, " ") : v).replace(/\s{2,}/g, " "); }
+const cleanName = L.cleanName, cleanText = L.cleanText, hasBanned = L.hasBanned, displayName = L.displayName, usersById = L.usersById;
 // "data:image/jpeg;base64,..." with a real JPEG inside and at most PHOTO_MAX bytes. Returns the url, or null.
-function checkPhoto(v) {
-  if (typeof v !== "string") return null;
-  const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(v);
-  if (!m || m[1].length > Math.ceil(PHOTO_MAX / 3) * 4) return null;
-  const buf = Buffer.from(m[1], "base64");
-  if (buf.length < 100 || buf.length > PHOTO_MAX || buf[0] !== 0xff || buf[1] !== 0xd8 || buf[2] !== 0xff) return null;
-  return v;
-}
+function checkPhoto(v) { return L.checkJpeg(v, PHOTO_MAX); }
 async function saveSettings(me, b) {
   const name = cleanName(b.name), description = cleanText(b.description);
   if (!name) return { status: 400, message: "Enter a chat name." };
@@ -93,27 +89,7 @@ async function saveSettings(me, b) {
   return { status: 200, settings: settingsOut(saved && saved[0] ? saved[0] : row) };
 }
 
-// Banned words / phrases (whole words, case-insensitive). Edit this list as you like.
-const BANNED = [
-  "porn", "xxx", "child porn", "cp links",
-  "cocaine", "heroin", "meth", "mdma", "drugs for sale", "weed for sale",
-  "free money", "double your money", "send crypto", "guaranteed profit", "investment plan"
-];
-const BANNED_RE = BANNED.map((w) => new RegExp("(^|[^\\p{L}\\p{N}])" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+") + "($|[^\\p{L}\\p{N}])", "iu"));
-function hasBanned(text) {
-  const t = String(text).normalize("NFKC");
-  return BANNED_RE.some((re) => re.test(t));
-}
-
-function cleanText(v) {
-  if (typeof v !== "string") return "";
-  return v.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "").replace(/\n{4,}/g, "\n\n\n").trim();
-}
-function displayName(u) {
-  if (!u) return "User";
-  const n = [u.first_name, u.last_name].filter(Boolean).join(" ").trim();
-  return n || (u.username ? "@" + u.username : "User");
-}
+// Banned words list (BANNED) and the text helpers now live in api/_lib.js (shared with profile.js / stories.js).
 
 // Which room may this user open? Returns the room key, or null with a reason.
 function resolveRoom(me, admin, room, uidParam) {
@@ -164,6 +140,7 @@ async function readUsers(query) {
 function memberOut(r, me, viewerAdmin, hasSeen, now) {
   const id = String(r.id);
   const m = { u: L.userHash(id), name: displayName(r), photo: r.photo_url || "", admin: L.isAdmin(id), mine: id === String(me) };
+  if (r.pv) m.pv = r.pv;
   m.seen = hasSeen && r.last_seen ? r.last_seen : null;
   m.online = m.mine || (hasSeen && isOnline(r.last_seen, now));
   if (viewerAdmin) { m.uid = id; m.username = r.username || ""; }
@@ -195,17 +172,9 @@ async function members(me, viewerAdmin) {
     online = (await L.sb("gc_users?select=id&limit=1&last_seen=gte." + L.enc(new Date(now - ONLINE_MS).toISOString()), { count: true })).total;
     if (!rows.some((r) => String(r.id) === String(me) && isOnline(r.last_seen, now))) online++;   // the viewer is online right now
   }
-  const list = rows.map((r) => memberOut(r, me, viewerAdmin, got.hasSeen, now)).sort(memberOrder);
+  const pm = await L.profilesFor(rows.map((r) => r.id));
+  const list = rows.map((r) => memberOut(L.mergeProfile(r, pm[String(r.id)]), me, viewerAdmin, got.hasSeen, now)).sort(memberOrder);
   return { total: Math.max(total, list.length), online: online, hasSeen: got.hasSeen, members: list, more: total > list.length };
-}
-
-async function usersById(ids) {
-  ids = Array.from(new Set(ids.map(String).filter((x) => /^\d{1,20}$/.test(x))));
-  if (!ids.length) return {};
-  const rows = await L.sb("gc_users?select=id,first_name,last_name,username,photo_url&id=in.(" + ids.join(",") + ")");
-  const map = {};
-  (rows || []).forEach((r) => { map[String(r.id)] = r; });
-  return map;
 }
 
 // Shape one message for this viewer.
@@ -224,6 +193,7 @@ function shape(m, users, me, viewerAdmin) {
     name: support && fromAdmin ? "Support" : displayName(u),
     photo: support && fromAdmin ? "" : (u && u.photo_url) || ""
   };
+  if (!(support && fromAdmin) && u && u.pv) out.pv = u.pv;      // custom profile (name already applied; photo fetched by clients)
   if (viewerAdmin) { out.uid = uid; out.username = (u && u.username) || ""; }
   return out;
 }
@@ -253,6 +223,7 @@ async function threads(viewerAdmin, me) {
       name: displayName(u),
       username: (u && u.username) || "",
       photo: (u && u.photo_url) || "",
+      pv: (u && u.pv) || undefined,
       u: L.userHash(t.threadUid),
       last: shape(t.last, users, me, viewerAdmin),
       waiting: !L.isAdmin(t.last.uid) // last word is from the user → needs a reply
@@ -279,7 +250,8 @@ module.exports = async (req, res) => {
         const uid = String(q.uid || "");
         if (!/^\d{1,20}$/.test(uid)) return L.fail(res, 400, "Bad user.");
         const got = await readUsers({ withSeen: "&id=eq." + uid + "&limit=1", noSeen: "&id=eq." + uid + "&limit=1" });
-        const r = got.rows[0] || { id: uid };
+        const pm = await L.profilesFor([uid]);
+        const r = L.mergeProfile(got.rows[0] || { id: uid }, pm[uid]);
         return L.json(res, 200, { ok: true, hasSeen: got.hasSeen, member: memberOut(r, me, true, got.hasSeen, Date.now()) });
       }
       if (q.view === "links") {
@@ -325,7 +297,7 @@ module.exports = async (req, res) => {
         const live = (await L.sb("gc_messages?select=id&deleted=is.false&room=eq." + L.enc(r.room) + "&order=id.desc&limit=" + PAGE)) || [];
         out.live = live.map((x) => Number(x.id));
       }
-      if (admin && r.threadUid) { const tu = users[r.threadUid]; out.thread = { uid: r.threadUid, name: displayName(tu), username: (tu && tu.username) || "", photo: (tu && tu.photo_url) || "" }; }
+      if (admin && r.threadUid) { const tu = users[r.threadUid]; out.thread = { uid: r.threadUid, name: displayName(tu), username: (tu && tu.username) || "", photo: (tu && tu.photo_url) || "", pv: (tu && tu.pv) || undefined }; }
       return L.json(res, 200, out);
     }
 
