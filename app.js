@@ -1,5 +1,6 @@
-// Group City website. Inside Telegram (opened as the Mini App) it logs in with Telegram initData and pays with
-// Telegram.WebApp.openInvoice. In a normal browser it uses the Telegram Login Widget and hands payment to the bot.
+// Group City website. Inside Telegram (opened as the Mini App) it logs in with Telegram initData; in a normal browser it
+// uses the Telegram Login Widget. Promotions are paid from the user's Group City Stars balance (kept by the worker);
+// the balance is topped up with a Telegram Stars invoice (Telegram.WebApp.openInvoice inside Telegram).
 // Chat, support and profile use this site's own /api (Vercel functions + Supabase); groups and Stars payments
 // use the Cloudflare worker. All text from the server is put on the page with textContent (never innerHTML).
 (function () {
@@ -424,6 +425,7 @@
     var s = inTg ? null : getSession(), u = inTg ? null : (getSession() || getChat()) && anyUser();
     var box = $("acct-groups"); box.textContent = "";
     box.onclick = null; box.style.cursor = "";
+    $("acct-row").classList.toggle("hide", inTg);
     if (inTg) { box.classList.add("hide"); }
     else if (u) {
       box.appendChild(avatar(u.photo_url, u.first_name || u.username || "U", String(u.id || ""), "av-s")); box.appendChild(el("span", "nm", userLabel(u)));
@@ -458,6 +460,7 @@
       else if (ce) loginMsg("Logged in. Chat and support are not available right now (" + ce + ")", "err");
       else loginMsg("", "");
       mineLoaded = false; renderAccount(); showPromote(); refreshTab();
+      if (!we) { loadBalance(); if (starsOpen()) showStars(); }
       if (!ce && current !== "msg") loadSummary(true);   // badge + warm the chat cache so the first open is instant
     });
   };
@@ -507,16 +510,18 @@
   // ---------- Promote ----------
   function showPromote() {
     var logged = inTg || !!getSession();
-    var showing = !$("pr-terms").classList.contains("hide") || !$("pr-pay").classList.contains("hide");
+    var showing = !$("pr-terms").classList.contains("hide");
     $("pr-login").classList.toggle("hide", logged);
-    if (!logged) { $("pr-form").classList.add("hide"); $("pr-terms").classList.add("hide"); $("pr-pay").classList.add("hide"); mountLogin($("login-promote")); return; }
+    if (!logged) { $("pr-form").classList.add("hide"); $("pr-terms").classList.add("hide"); mountLogin($("login-promote")); return; }
     if (!showing) $("pr-form").classList.remove("hide");
   }
   function setPkg(p) {
     pkg = p === "normal" ? "normal" : "top";
     $("pk-normal").classList.toggle("on", pkg === "normal"); $("pk-top").classList.toggle("on", pkg === "top");
-    $("pr-buy").textContent = "Buy · " + (pkg === "top" ? data.topPrice : data.price) + " ⭐";
+    $("pr-buy").textContent = "Pay · " + pkgCost() + " ⭐";
+    lowCheck();
   }
+  function pkgCost() { return pkg === "top" ? data.topPrice : data.price; }
   function prices() {
     var d = data.days ? " · " + data.days + " days" : "";
     $("pk-normal-p").textContent = data.price + " ⭐"; $("pk-top-p").textContent = data.topPrice + " ⭐";
@@ -536,9 +541,9 @@
   }
   function resetForm() { $("pr-url").value = ""; $("pr-title").value = ""; prCat = ""; catPicker(); }
   function msg(text, kind) { var m = $("pr-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = text; if (!text) m.classList.add("hide"); }
-  function showOnly(id) { ["pr-form", "pr-terms", "pr-pay"].forEach(function (x) { $(x).classList.toggle("hide", x !== id); }); $("sheet").scrollTop = 0; }
-  function openSheet() { $("v-promote").classList.remove("hide"); document.body.classList.add("lock"); showPromote(); }
-  function closeSheet() { $("v-promote").classList.add("hide"); document.body.classList.remove("lock"); }
+  function showOnly(id) { ["pr-form", "pr-terms"].forEach(function (x) { $(x).classList.toggle("hide", x !== id); }); $("sheet").scrollTop = 0; }
+  function openSheet() { $("v-promote").classList.remove("hide"); document.body.classList.add("lock"); showPromote(); if (loggedIn()) loadBalance(); }
+  function closeSheet() { $("v-promote").classList.add("hide"); closeStars(); syncBack(); }
   function promote(prefill) {
     if (prefill && prefill.url) { $("pr-url").value = prefill.url; $("pr-title").value = prefill.title && prefill.title.charAt(0) !== "@" ? prefill.title : ""; }
     if (inTg || getSession()) showOnly("pr-form");
@@ -549,13 +554,15 @@
     if (CATS.length && CATS.indexOf(prCat) < 0) { showOnly("pr-form"); $("pr-cats").classList.add("need"); msg("Choose a category", "err"); return; }
     var url = $("pr-url").value.trim();
     if (!/^(https?:\/\/)?(t\.me|telegram\.me)\/\S+$/i.test(url) && !/^@[A-Za-z0-9_]{4,}$/.test(url)) { msg("Enter your Telegram group link, like https://t.me/yourgroup", "err"); $("pr-url").focus(); return; }
+    if (stars.bal != null && stars.bal < pkgCost()) { showOnly("pr-form"); msg("", ""); showLow(pkgCost() - stars.bal); return; }   // known short: no request
     var body = { title: $("pr-title").value.trim(), url: url, pkg: pkg, agree: agree === true };
     if (prCat) body.cat = prCat;
     var req;
-    if (inTg) { body.initData = tg.initData; req = api("/app/api/invoice", { body: body }); }
-    else if (getSession()) req = api("/web/api/promote", { body: body, auth: true });
+    if (inTg) { body.initData = tg.initData; req = api("/app/api/promote-balance", { body: body }); }
+    else if (getSession()) req = api("/web/api/promote-balance", { body: body, auth: true });
     else { showPromote(); return; }
-    busy = true; $("pr-buy").disabled = true; $("pr-terms-ok").disabled = true; msg("Preparing payment…", "");
+    var top = pkg === "top";
+    busy = true; $("pr-buy").disabled = true; $("pr-terms-ok").disabled = true; msg("Paying from your balance…", "");
     req.then(function (d) {
       busy = false; $("pr-buy").disabled = false; $("pr-terms-ok").disabled = false;
       if (d._status === 401) {
@@ -563,32 +570,161 @@
         setSession(null); renderAccount(); showPromote(); loginMsg("Please log in with Telegram again.", "err"); return;
       }
       if (d.error === "terms") { $("pr-terms-text").textContent = String(d.terms || ""); showOnly("pr-terms"); return; }
-      if (inTg && d.ok && isTgUrl(d.link)) { showOnly("pr-form"); msg("", ""); payInTelegram(d.link); return; }
-      if (!inTg && d.ok && isTgUrl(d.pay)) { showOrder(d, body); return; }
-      showOnly("pr-form"); msg(d.message || "Something went wrong. Please try again.", "err");
+      showOnly("pr-form");
+      if (d.balance != null && isFinite(Number(d.balance))) setBal(Number(d.balance));
+      if (d.error === "balance") { msg("", ""); showLow(Number(d.need) || Math.max(1, (Number(d.price) || pkgCost()) - (stars.bal || 0))); return; }
+      if (d.ok) {
+        var until = Number(d.until) ? " until " + new Date(Number(d.until)).toISOString().slice(0, 10) : "";
+        msg("✅ Paid " + (Number(d.price) || pkgCost()) + " ⭐ from your balance. Your group is listed" + (top ? " in ⭐ Featured" : " in All Groups") + until + ".", "okm");
+        resetForm(); mineLoaded = false;
+        setTimeout(load, 800);
+        return;
+      }
+      msg(d.error === "nodb" ? "Stars balance is not available right now. Please try again later." : (d.message || "Something went wrong. Please try again."), "err");
     }).catch(function () { busy = false; $("pr-buy").disabled = false; $("pr-terms-ok").disabled = false; showOnly("pr-form"); msg("Couldn't connect. Check your connection.", "err"); });
   }
-  function payInTelegram(link) {
-    var done = function (status) {
-      if (status === "paid") {
-        msg("✅ Paid! Your group is listed" + (pkg === "top" ? " in ⭐ Featured." : " in All Groups.") + " It can take a few seconds to appear.", "okm");
-        resetForm(); mineLoaded = false;
-        setTimeout(load, 1500); setTimeout(load, 5000);
-      } else if (status === "cancelled") msg("Payment cancelled.", "");
-      else if (status === "failed") msg("Payment failed. Please try again.", "err");
-      else if (status === "pending") msg("Payment is being processed…", "");
-    };
-    try { if (tg.openInvoice) { tg.openInvoice(link, done); return; } } catch (e) {}
-    open(link);
+  // "Not enough Stars" box in the Promote form; its Top up opens the Stars sheet with a pack that covers the gap
+  var lowNeed = 0;
+  function showLow(need) {
+    lowNeed = Math.max(1, Math.ceil(Number(need) || 1));
+    $("pr-low-d").textContent = "You have " + fmtStars(stars.bal || 0) + " ⭐. " + (pkg === "top" ? "TOP" : "Normal") + " costs " + fmtStars(pkgCost()) + " ⭐, so you need " + fmtStars(lowNeed) + " more.";
+    $("pr-low").classList.remove("hide"); $("pr-buy").classList.add("hide");
   }
-  function showOrder(d, body) {
-    var top = d.pkg === "top";
-    $("pay-title").textContent = body.title || body.url.replace(/^https?:\/\//i, "");
-    $("pay-url").textContent = body.url;
-    $("pay-pkg").textContent = (body.cat ? body.cat + " · " : "") + (top ? "⭐ TOP — shown at the top" : "👥 Normal — listed in All Groups") + " · " + (Number(d.price) || "") + " ⭐ · " + (Number(d.days) || data.days) + " days";
-    $("pay-link").setAttribute("href", d.pay);
-    $("pay-bot").textContent = botName();
-    msg("", ""); showOnly("pr-pay");
+  function hideLow() { lowNeed = 0; $("pr-low").classList.add("hide"); $("pr-buy").classList.remove("hide"); }
+  function lowCheck() {   // after the balance or the package changes
+    if ($("pr-low").classList.contains("hide")) return;
+    if (stars.bal != null && stars.bal >= pkgCost()) hideLow(); else showLow(pkgCost() - (stars.bal || 0));
+  }
+
+  // ---------- Stars balance (worker D1) + top-up ----------
+  var stars = { bal: null, packs: [10, 50, 100, 250, 500], pick: 0, fromPromote: false, busy: false, termsPack: 0, gen: 0 };
+  function loggedIn() { return inTg || !!getSession(); }
+  function fmtStars(n) { return String(Math.max(0, Math.floor(Number(n) || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+  function setBal(n) {
+    stars.bal = n == null ? null : Math.max(0, Math.floor(Number(n) || 0));
+    var t = fmtStars(stars.bal || 0);
+    $("hd-bal").textContent = t; $("st-bal").textContent = t; $("pr-bal-n").textContent = t; $("pf-stars-v").textContent = t;
+    $("hd-stars").setAttribute("aria-label", "Stars balance: " + t);
+    lowCheck();
+  }
+  function balReq() {
+    if (inTg) return api("/app/api/balance", { body: { initData: tg.initData } });
+    if (getSession()) return api("/web/api/balance", { auth: true });
+    return null;
+  }
+  function loadBalance() {   // resolves to the balance (or null)
+    var req = balReq();
+    if (!req) { setBal(null); return Promise.resolve(null); }
+    var gen = ++stars.gen;
+    return req.then(function (d) {
+      if (d._status === 401 && !inTg) { setSession(null); renderAccount(); }
+      if (d.ok && Array.isArray(d.packs) && d.packs.length) stars.packs = d.packs.map(Number).filter(function (n) { return n > 0; });
+      if (gen === stars.gen && d.ok) setBal(d.balance);
+      return d.ok ? stars.bal : null;
+    }).catch(function () { return null; });
+  }
+  function starsOpen() { return !$("v-stars").classList.contains("hide"); }
+  function stMsg(text, kind) { var m = $("st-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = text; if (!text) m.classList.add("hide"); }
+  function stOnly(id) { ["st-body", "st-terms"].forEach(function (x) { $(x).classList.toggle("hide", x !== id); }); }
+  function packFor(need) {   // smallest pack that covers `need` (largest pack when none does)
+    var ps = stars.packs.slice().sort(function (a, b) { return a - b; });
+    for (var i = 0; i < ps.length; i++) if (ps[i] >= need) return ps[i];
+    return ps[ps.length - 1] || 0;
+  }
+  function renderPacks() {
+    var box = $("st-packs"); box.textContent = "";
+    stars.packs.forEach(function (n, i) {
+      var b = el("button", "stpack" + (n === stars.pick ? " on" : "")); b.type = "button"; b.setAttribute("role", "listitem");
+      b.setAttribute("data-pack", String(n));
+      var ic = el("span", "stack"); for (var k = 0; k <= Math.min(i, 2); k++) ic.appendChild(starIcon());
+      b.appendChild(ic);
+      var mid = el("span", "spi"); mid.appendChild(el("span", "spn", fmtStars(n) + " Stars"));
+      if (n === stars.pick && lowNeed) mid.appendChild(el("span", "spd", "Covers what you need"));
+      b.appendChild(mid);
+      b.appendChild(el("span", "spb", "Buy"));
+      b.onclick = function () { stars.pick = n; topup(n, false); };
+      box.appendChild(b);
+    });
+  }
+  function starIcon() {
+    var ns = "http://www.w3.org/2000/svg", sv = document.createElementNS ? document.createElementNS(ns, "svg") : el("svg");
+    sv.setAttribute("viewBox", "0 0 24 24"); sv.setAttribute("aria-hidden", "true"); sv.setAttribute("class", "stico");
+    var pth = document.createElementNS ? document.createElementNS(ns, "path") : el("path");
+    pth.setAttribute("d", "M12 2.2l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.1l-5.9 3.2 1.3-6.6-4.9-4.6 6.6-.8z"); sv.appendChild(pth);
+    return sv;
+  }
+  function showStars() {
+    var logged = loggedIn();
+    $("st-login").classList.toggle("hide", logged);
+    if (!logged) { $("st-body").classList.add("hide"); $("st-terms").classList.add("hide"); mountLogin($("login-stars")); return; }
+    if ($("st-terms").classList.contains("hide")) $("st-body").classList.remove("hide");
+    renderPacks();
+  }
+  function openStars(o) {
+    o = o || {};
+    stars.fromPromote = !!o.fromPromote;
+    stars.pick = o.need ? packFor(o.need) : 0;
+    stMsg("", ""); $("st-refresh").classList.add("hide"); stOnly("st-body");
+    $("v-stars").classList.remove("hide"); document.body.classList.add("lock");
+    showStars();
+    if (loggedIn()) loadBalance().then(function () { if (starsOpen()) renderPacks(); });
+  }
+  function closeStars() { if (!$("v-stars")) return; $("v-stars").classList.add("hide"); stars.fromPromote = false; syncBack(); }
+  function topup(n, agree) {
+    if (stars.busy) return;
+    var body = { pack: n, agree: agree === true }, req;
+    if (inTg) { body.initData = tg.initData; req = api("/app/api/topup", { body: body }); }
+    else if (getSession()) req = api("/web/api/topup", { body: body, auth: true });
+    else { showStars(); return; }
+    stars.busy = true; stMsg("Preparing payment…", ""); renderPacks();
+    req.then(function (d) {
+      stars.busy = false;
+      if (d._status === 401) {
+        if (inTg) { stMsg("Your Telegram session expired. Close and open Group City again.", "err"); return; }
+        setSession(null); renderAccount(); showStars(); loginMsg("Please log in with Telegram again.", "err"); return;
+      }
+      if (d.error === "terms") { stars.termsPack = n; $("st-terms-text").textContent = String(d.terms || ""); stOnly("st-terms"); return; }
+      stOnly("st-body");
+      if (d.ok && isTgUrl(d.link)) { stMsg("", ""); payTopup(d.link, n); return; }
+      stMsg(d.error === "nodb" ? "Stars balance is not available right now. Please try again later." : (d.message || "Something went wrong. Please try again."), "err");
+    }).catch(function () { stars.busy = false; stOnly("st-body"); stMsg("Couldn't connect. Check your connection.", "err"); });
+  }
+  function payTopup(link, n) {
+    var before = stars.bal || 0;
+    var done = function (status) {
+      if (status === "paid") { stMsg("✅ Paid! Adding " + fmtStars(n) + " Stars to your balance…", "okm"); waitCredit(before + n, n, 0); }
+      else if (status === "pending") { stMsg("Payment is being processed…", ""); waitCredit(before + n, n, 0); }
+      else if (status === "cancelled") stMsg("Payment cancelled.", "");
+      else if (status === "failed") stMsg("Payment failed. Please try again.", "err");
+    };
+    try { if (inTg && tg.openInvoice) { tg.openInvoice(link, done); return; } } catch (e) {}
+    open(link);   // browser: Telegram opens the invoice; the balance is checked again on return
+    stMsg("Telegram opens the payment. After you pay, come back here; your balance updates by itself.", "");
+    $("st-refresh").classList.remove("hide");
+    stars.waitFor = { target: before + n, n: n };
+  }
+  var CREDIT_WAIT = [1500, 3000, 5000, 8000];   // the bot adds the Stars when Telegram confirms the payment
+  function waitCredit(target, n, step) {
+    loadBalance().then(function (b) {
+      if (b != null && b >= target) { credited(n); return; }
+      if (step >= CREDIT_WAIT.length) { stMsg("Payment received. Your balance updates in a moment.", ""); $("st-refresh").classList.remove("hide"); stars.waitFor = { target: target, n: n }; return; }
+      setTimeout(function () { waitCredit(target, n, step + 1); }, CREDIT_WAIT[step]);
+    });
+  }
+  function credited(n) {
+    stars.waitFor = null; $("st-refresh").classList.add("hide");
+    if (stars.fromPromote && !$("v-promote").classList.contains("hide")) {
+      closeStars(); lowCheck();
+      var enough = stars.bal >= pkgCost();
+      if (enough) hideLow();
+      msg("✅ " + fmtStars(n) + " Stars added. Balance: " + fmtStars(stars.bal) + " ⭐." + (enough ? " Tap Pay to promote your group." : ""), "okm");
+      return;
+    }
+    stMsg("✅ " + fmtStars(n) + " Stars added. Balance: " + fmtStars(stars.bal) + " ⭐", "okm"); renderPacks();
+  }
+  function recheckCredit() {   // browser: back from Telegram, or "I paid · refresh balance"
+    var w = stars.waitFor;
+    loadBalance().then(function (b) { if (w && b != null && b >= w.target) credited(w.n); });
   }
 
   // ---------- My groups ----------
@@ -630,7 +766,7 @@
       });
       var rb = el("button", "big", "⭐ Promote a group"); rb.type = "button"; rb.onclick = function () { promote(); };
       box.appendChild(rb);
-      box.appendChild(el("div", "note", "Each payment lists one group for " + (Number(d.days) || data.days) + " days. When it ends, promote it again."));
+      box.appendChild(el("div", "note", "Each promotion lists one group for " + (Number(d.days) || data.days) + " days, paid from your Stars balance. When it ends, promote it again."));
     }).catch(function () { box.textContent = ""; var x = el("div", "empty"); x.appendChild(el("b", null, "Couldn't connect")); x.appendChild(document.createTextNode("Check your connection.")); box.appendChild(x); });
   }
 
@@ -851,7 +987,7 @@
   // ---------- screens (support inbox, chat) ----------
   var screens = [];   // open screen ids, top last
   function syncBack() {
-    document.body.classList.toggle("lock", screens.length > 0 || !$("v-promote").classList.contains("hide"));
+    document.body.classList.toggle("lock", screens.length > 0 || !$("v-promote").classList.contains("hide") || !$("v-stars").classList.contains("hide"));
     if (!inTg || !tg.BackButton) return;
     try { if (screens.length) tg.BackButton.show(); else tg.BackButton.hide(); } catch (e) {}
   }
@@ -1593,10 +1729,12 @@
     var cl = $("pf-chatlogin"); cl.textContent = ""; cl.classList.add("hide");
     if (!inTg && !c) { cl.classList.remove("hide"); loginPanel(cl, { id: "login-pfchat", title: "Turn on chat", hint: "Log in with Telegram once more to use Messages and Support." }); }
     $("pf-logout").classList.toggle("hide", inTg);
+    loadBalance();
     if (!mineLoaded) loadMine();
   }
   function logout() {
     clearMsgCache(""); setSession(null); setChat(null); mineLoaded = false; lastSum = null; unread = { at: "", n: 0 };
+    if (!inTg) setBal(null);
     closeAllScreens(); renderAccount(); showPromote(); refreshTab();
   }
   $("pf-logout").onclick = logout;
@@ -1642,9 +1780,21 @@
   });
   $("q-x").onclick = function () { $("q").value = ""; searchInput(); try { $("q").focus(); } catch (e) {} };
   $("promo-add").onclick = function () { promote(); };
-  // Telegram-style header ⋮ + floating button (UI shortcuts to existing actions); search lives in the bar under the header
+  // floating button + header Stars pill (the old header ⋮ only opened Profile, which is in the bottom bar)
   $("fab-add").onclick = function () { promote(); };
-  $("hd-menu").onclick = function () { tab("profile"); };
+  $("hd-stars").onclick = function () { openStars(); };
+  $("pf-stars").onclick = function () { openStars(); };
+  $("pr-bal").onclick = function () { openStars({ fromPromote: true }); };
+  $("pr-bal-top").onclick = function () { openStars({ fromPromote: true }); };
+  $("pr-topup").onclick = function () { openStars({ fromPromote: true, need: lowNeed || 1 }); };
+  $("st-close").onclick = closeStars;
+  $("v-stars").addEventListener("click", function (e) { if (e.target === $("v-stars")) closeStars(); });
+  $("st-terms-ok").onclick = function () { stOnly("st-body"); topup(stars.termsPack, true); };
+  $("st-terms-no").onclick = function () { stOnly("st-body"); stMsg("You need to agree to the terms before buying Stars.", ""); };
+  $("st-refresh").onclick = recheckCredit;
+  $("st-help").onclick = function () { open(botLink("paysupport")); };
+  $("st-terms-l").onclick = function () { open(botLink("terms")); };
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && stars.waitFor && starsOpen()) recheckCredit(); });
   $("pr-close").onclick = closeSheet;
   $("v-promote").addEventListener("click", function (e) { if (e.target === $("v-promote")) closeSheet(); });
   $("pk-normal").onclick = function () { setPkg("normal"); };
@@ -1652,15 +1802,13 @@
   $("pr-buy").onclick = function () { buy(false); };
   $("pr-terms-ok").onclick = function () { buy(true); };
   $("pr-terms-no").onclick = function () { showOnly("pr-form"); msg("You need to agree to the terms before paying.", ""); };
-  $("pay-done").onclick = function () { mineLoaded = false; resetForm(); showOnly("pr-form"); tab("profile"); };
-  $("pay-new").onclick = function () { resetForm(); showOnly("pr-form"); };
   $("logout").onclick = logout;
-  if (!inTg) $("pr-note").textContent = "One payment lists one group. You pay with Telegram Stars in the bot.";
 
   chips(); catPicker(); prices(); renderAccount(); netUpdate(); searchBar();
   applyPubInfo();   // cached custom name / photo of the public chat on the Messages row
   var sp = (inTg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || (new URLSearchParams(location.search).get("tab") || "");
   if (sp === "promote") promote(); else if (sp === "mine" || sp === "profile" || sp === "msg") tab(sp);
+  if (loggedIn()) loadBalance();   // header Stars pill
   if (inTg) tgChatLogin().then(function () { renderAccount(); refreshTab(); if (current !== "msg") loadSummary(true); });
   else if (chatReady() && current !== "msg") loadSummary(true);   // unread badge on the bottom-nav Messages
   load();
