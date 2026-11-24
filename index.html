@@ -75,25 +75,85 @@
    </div>
   </section>
 
-  <!-- Stars: Group City balance + top-up packs (Telegram Stars invoice through the bot) -->
+  <!-- Stars wallet: balance, Send / Receive / Buy, History. Buy = top-up packs (Telegram Stars invoice through the bot);
+       Send / Receive = transfers between Group City users (worker /app|web/api/transfer, lookup-user, history) -->
   <section id="v-stars" class="sheetbg stsheet hide">
    <div class="sheet" id="st-sheet">
     <div class="grab"></div>
-    <div class="shead"><div><div class="title">Stars</div><div class="sub">Your Group City balance</div></div><button class="x" id="st-close" type="button" aria-label="Close">✕</button></div>
-    <div class="stbal"><div class="stbig"><svg class="stico" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="sg3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd34e"/><stop offset="1" stop-color="#f5a623"/></linearGradient></defs><path fill="url(#sg3)" d="M12 2.2l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.1l-5.9 3.2 1.3-6.6-4.9-4.6 6.6-.8z"/></svg><span id="st-bal">0</span></div><div class="sthint" id="st-hint">Use Stars to promote your groups</div></div>
+    <div class="shead"><button class="stback hide" id="st-back" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div class="sttl"><div class="title" id="st-title">Stars</div><div class="sub" id="st-sub">Your Group City balance</div></div><button class="x" id="st-close" type="button" aria-label="Close">✕</button></div>
     <div class="panel hide" id="st-login">
-      <h3>Log in to buy Stars</h3>
-      <p class="hint">Log in with your Telegram account to see your balance and buy Stars.</p>
+      <h3>Log in to use Stars</h3>
+      <p class="hint">Log in with your Telegram account to see your balance, buy, send and receive Stars.</p>
       <div class="login-box" id="login-stars"></div>
       <div class="msg hide" data-lstatus="1"></div>
     </div>
-    <div id="st-body">
+    <!-- wallet home -->
+    <div id="st-main">
+      <div class="stbal"><div class="stbig"><svg class="stico" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="sg3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd34e"/><stop offset="1" stop-color="#f5a623"/></linearGradient></defs><path fill="url(#sg3)" d="M12 2.2l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.1l-5.9 3.2 1.3-6.6-4.9-4.6 6.6-.8z"/></svg><span id="st-bal">0</span></div><div class="sthint" id="st-hint">Use Stars to promote groups or send them to friends</div></div>
+      <div class="stacts" role="group" aria-label="Wallet actions">
+        <button class="stact" id="st-a-send" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></span><span class="stlab">Send</span></button>
+        <button class="stact" id="st-a-recv" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5.5 12.5 12 19l6.5-6.5"/></svg></span><span class="stlab">Receive</span></button>
+        <button class="stact" id="st-a-buy" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span class="stlab">Buy</span></button>
+      </div>
+      <div class="sthead">History</div>
+      <div class="sthist" id="st-hist" role="list" aria-label="Stars history"></div>
+      <div class="stlinks"><button class="link inline" id="st-help" type="button">Payment help</button><span aria-hidden="true">·</span><button class="link inline" id="st-terms-l" type="button">Terms</button></div>
+    </div>
+    <!-- Buy: top-up packs (id st-body kept from v12) -->
+    <div id="st-body" class="hide">
+      <div class="stmini">Balance: <b><span id="st-bal-b">0</span> ⭐</b></div>
       <div class="sthead">Top up</div>
       <div class="stpacks" id="st-packs" role="list"></div>
       <div class="msg hide" id="st-msg"></div>
       <button class="link hide" id="st-refresh" type="button">I paid · refresh balance</button>
-      <div class="note">Stars you buy are added to your Group City balance and can be spent on promotions. Paid with Telegram Stars.</div>
-      <div class="stlinks"><button class="link inline" id="st-help" type="button">Payment help</button><span aria-hidden="true">·</span><button class="link inline" id="st-terms-l" type="button">Terms</button></div>
+      <div class="note">Stars you buy are added to your Group City balance. Spend them on promotions or send them to other Group City users. Paid with Telegram Stars.</div>
+      <div class="stlinks"><button class="link inline" id="st-help-b" type="button">Payment help</button><span aria-hidden="true">·</span><button class="link inline" id="st-terms-lb" type="button">Terms</button></div>
+    </div>
+    <!-- Send -->
+    <div id="st-send" class="hide">
+      <div class="stform">
+        <label class="field"><span>Recipient</span><input id="sd-to" type="text" maxlength="64" placeholder="@username or Group City ID" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
+        <div class="sdwho hide" id="sd-who"></div>
+        <div class="sderr hide" id="sd-err"></div>
+        <label class="field"><span>Amount</span><input id="sd-amt" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="0" autocomplete="off" enterkeyhint="next"></label>
+        <div class="sdchips" id="sd-chips"><button type="button" data-amt="10">10</button><button type="button" data-amt="50">50</button><button type="button" data-amt="100">100</button></div>
+        <div class="sdbal" id="sd-bal">Balance: 0 ⭐</div>
+        <label class="field"><span>Note (optional) <i id="sd-ncount">100</i></span><input id="sd-note" type="text" maxlength="100" placeholder="Add a note" autocomplete="off" enterkeyhint="done"></label>
+        <div class="msg hide" id="sd-msg"></div>
+        <button class="big hide" id="sd-topup" type="button">⭐ Top up</button>
+        <button class="buy" id="sd-go" type="button" disabled>Send ⭐</button>
+        <div class="note">Stars are sent from your Group City balance. Sent Stars can't be refunded or cashed out.</div>
+      </div>
+      <div class="sdconf hide" id="sd-conf" role="dialog" aria-modal="true" aria-labelledby="sd-conf-t">
+        <div class="sdcbox">
+          <div class="sdc-av" id="sd-conf-av"></div>
+          <div class="sdc-t" id="sd-conf-t">Send Stars?</div>
+          <div class="sdc-d" id="sd-conf-d"></div>
+          <div class="row2"><button class="ghost" id="sd-conf-no" type="button">Cancel</button><button class="buy" id="sd-conf-ok" type="button">Send</button></div>
+        </div>
+      </div>
+    </div>
+    <!-- Sent -->
+    <div id="st-done" class="hide">
+      <div class="sddone">
+        <div class="sdcheck"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        <div class="sdd-t" id="sdd-t">Stars sent</div>
+        <div class="sdd-d" id="sdd-d"></div>
+        <div class="sdd-n hide" id="sdd-n"></div>
+        <div class="sdd-b" id="sdd-b"></div>
+        <button class="buy" id="sdd-ok" type="button">Done</button>
+      </div>
+    </div>
+    <!-- Receive -->
+    <div id="st-recv" class="hide">
+      <div class="rchero"><div class="rcav" id="rc-av"></div><div class="rcname" id="rc-name"></div><div class="rchint">Others can send you Stars with your username or ID.</div></div>
+      <div class="rcrows">
+        <div class="rcrow"><div class="rcl"><div class="rck">Group City ID</div><div class="rcv" id="rc-id">—</div></div><button class="rccopy" id="rc-id-c" type="button">Copy</button></div>
+        <div class="rcrow" id="rc-user-r"><div class="rcl"><div class="rck">Username</div><div class="rcv" id="rc-user">—</div></div><button class="rccopy" id="rc-user-c" type="button">Copy</button></div>
+        <div class="rcrow"><div class="rcl"><div class="rck">Share text</div><div class="rcv rcs" id="rc-share-t"></div></div><button class="rccopy" id="rc-share-c" type="button">Copy</button></div>
+      </div>
+      <div class="msg hide" id="rc-msg"></div>
+      <button class="buy rcshare" id="rc-share" type="button">Share</button>
     </div>
     <div class="panel hide" id="st-terms">
       <h3>📜 Terms</h3>

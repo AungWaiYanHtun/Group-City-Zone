@@ -599,3 +599,87 @@ html .screen.story,html.dark .screen.story{background:#000;background-image:none
 .svcap{flex:none;margin:8px 12px calc(14px + env(safe-area-inset-bottom));padding:10px 14px;border-radius:16px;background:rgba(0,0,0,.45);font-size:15.5px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;max-height:30vh;overflow:auto}
 .svcap .mlink{color:#8fd3ff}
 @media (prefers-reduced-motion:reduce){.svload .spin{animation:none}}
+
+/* ---------- v14: Stars wallet (Send / Receive / Buy, History) ---------- */
+.shead .sttl{flex:1;min-width:0}
+.stback{flex:none;width:32px;height:32px;margin:0 6px 0 -8px;padding:0;border:0;border-radius:50%;background:none;color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.stback svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.stback:active,.stback:hover{background:var(--soft)}
+.stacts{display:flex;justify-content:center;gap:26px;padding:16px 16px 6px}
+.stact{display:flex;flex-direction:column;align-items:center;gap:7px;width:72px;padding:0;border:0;background:none;color:var(--text);font:inherit;cursor:pointer}
+.stcirc{width:56px;height:56px;border-radius:50%;background:var(--btn);color:var(--btnt);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(42,160,90,.28);transition:transform .12s}
+.stcirc svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.stact:active .stcirc{transform:scale(.93)}
+html.dark .stcirc{box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.stlab{font-size:13.5px;font-weight:600;color:var(--accent)}
+.sthist{margin:0 12px;border-radius:14px;background:var(--sec);overflow:hidden}
+.hrow{position:relative;display:flex;align-items:center;gap:12px;padding:10px 14px 10px 12px;min-height:58px}
+.hrow+.hrow:before{content:"";position:absolute;top:0;left:62px;right:0;height:1px;background:var(--sep)}
+.hav,.hic{width:38px;height:38px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:600;overflow:hidden}
+.hav img{width:100%;height:100%;object-fit:cover}
+.hic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.hic-topup{background:linear-gradient(180deg,#ffd34e,#f5a623)}
+.hic-promote{background:#2aa05a}
+.hic-refund,.hic-promote_refund,.hic-refund_undo{background:#8e8e93}
+.hic-other{background:#5a8dee}
+.hmid{flex:1;min-width:0}
+.ht{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hs{font-size:12.5px;color:var(--hint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ham{flex:none;display:flex;align-items:center;gap:3px;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.ham .stico{width:16px;height:16px}
+.ham.plus{color:#2aa05a}
+html.dark .ham.plus{color:#5ec27a}
+.ham.minus{color:var(--text)}
+.hempty{padding:22px 18px;text-align:center;font-size:13.5px;color:var(--hint);line-height:1.45}
+.stmini{text-align:center;font-size:14px;color:var(--hint);padding:8px 16px 0}
+.stmini b{color:var(--text);font-variant-numeric:tabular-nums}
+.stform{padding:8px 16px 4px}
+.stform .field span{display:flex;justify-content:space-between}
+.stform .field span i{font-style:normal}
+.sdwho{display:flex;align-items:center;gap:12px;margin:-4px 0 12px;padding:10px 12px;border-radius:14px;background:var(--sec)}
+.sdav{width:42px;height:42px;font-size:18px;overflow:hidden;flex:none}
+.sdw-t{flex:1;min-width:0}
+.sdw-n{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sdw-u{font-size:12.5px;color:var(--hint);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sdw-ok{flex:none;width:24px;height:24px;border-radius:50%;background:#2aa05a;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.sdw-l{font-size:13.5px;color:var(--hint)}
+.sderr{margin:-4px 0 12px;padding:10px 12px;border-radius:12px;font-size:13px;line-height:1.45;background:rgba(220,70,60,.14)}
+.sdchips{display:flex;gap:8px;margin:-4px 0 8px}
+.sdchips button{flex:1;height:36px;border:0;border-radius:18px;background:var(--sec);color:var(--text);font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.sdchips button:before{content:"⭐ "}
+.sdchips button.on{background:rgba(42,160,90,.16);color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.sdbal{font-size:12.5px;color:var(--hint);margin:0 0 12px}
+.stform .msg{margin:0 0 12px}
+#sd-topup{margin:0 auto 12px}
+#sd-go:disabled{opacity:.45;cursor:default}
+.stform .note{margin:10px 0 0}
+#st-send{position:relative}
+.sdconf{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:24px;animation:fd .15s}
+.sdcbox{width:100%;max-width:340px;background:var(--bg);border-radius:18px;padding:20px 18px 16px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.sdc-av{display:flex;justify-content:center;margin-bottom:10px}
+.sdcav{width:64px;height:64px;font-size:26px;overflow:hidden}
+.sdc-t{font-size:17px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
+.sdc-d{font-size:13px;color:var(--hint);margin:6px 0 16px;white-space:pre-line;line-height:1.45;overflow-wrap:anywhere}
+.sddone{display:flex;flex-direction:column;align-items:center;text-align:center;padding:18px 20px 6px}
+.sdcheck{width:76px;height:76px;border-radius:50%;background:#2aa05a;color:#fff;display:flex;align-items:center;justify-content:center;animation:pop .35s ease-out}
+.sdcheck svg{width:40px;height:40px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+@keyframes pop{0%{transform:scale(.5);opacity:0}70%{transform:scale(1.08)}100%{transform:none;opacity:1}}
+.sdd-t{font-size:22px;font-weight:700;margin-top:14px}
+.sdd-d{font-size:15px;color:var(--hint);margin-top:4px;overflow-wrap:anywhere}
+.sdd-n{font-size:14px;margin-top:10px;padding:8px 12px;border-radius:12px;background:var(--sec);max-width:100%;overflow-wrap:anywhere}
+.sdd-b{font-size:13px;color:var(--hint);margin:12px 0 18px}
+.rchero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 24px 14px}
+.rcavi{width:72px;height:72px;font-size:30px;overflow:hidden}
+.rcname{font-size:18px;font-weight:600;margin-top:10px;overflow-wrap:anywhere}
+.rchint{font-size:13px;color:var(--hint);margin-top:4px}
+.rcrows{margin:0 12px;border-radius:14px;background:var(--sec);overflow:hidden}
+.rcrow{position:relative;display:flex;align-items:center;gap:12px;padding:11px 12px 11px 16px}
+.rcrow+.rcrow:before{content:"";position:absolute;top:0;left:16px;right:0;height:1px;background:var(--sep)}
+.rcl{flex:1;min-width:0}
+.rck{font-size:12.5px;color:var(--hint)}
+.rcv{font-size:15.5px;font-weight:500;margin-top:1px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.rcv.rcs{font-size:13.5px;font-weight:400;line-height:1.4}
+.rccopy{flex:none;border:0;border-radius:14px;padding:6px 14px;background:rgba(42,160,90,.14);color:var(--accent);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+#st-recv .msg{margin:12px 16px 0}
+.rcshare{width:calc(100% - 32px);margin:14px 16px 4px}
+#st-main .stlinks{margin-top:14px}
