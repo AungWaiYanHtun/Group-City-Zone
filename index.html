@@ -90,8 +90,8 @@
         <span class="cbot"><span class="cprev" id="sup-prev">Message the Group City team</span><span class="cbadge hide" id="sup-badge"></span></span></span>
       </button>
       <button class="crow" id="row-public" type="button">
-        <span class="av cav av-ico" style="background:linear-gradient(#62d77c,#2aa05a)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z"/><path d="M17 9h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2.5L16 19h-4a2 2 0 0 1-1.7-1"/></svg></span>
-        <span class="cinfo"><span class="ctop"><span class="cnm"><span class="cname">Group City Chat</span><span class="mutei hide" id="pub-muted" role="img" aria-label="Muted"></span></span><span class="ctime" id="pub-time"></span></span>
+        <span class="av cav av-ico" id="pub-av" style="background:linear-gradient(#62d77c,#2aa05a)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z"/><path d="M17 9h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2.5L16 19h-4a2 2 0 0 1-1.7-1"/></svg></span>
+        <span class="cinfo"><span class="ctop"><span class="cnm"><span class="cname" id="pub-name">Group City Chat</span><span class="mutei hide" id="pub-muted" role="img" aria-label="Muted"></span></span><span class="ctime" id="pub-time"></span></span>
         <span class="cbot"><span class="cprev" id="pub-prev">Chat with everyone</span><span class="cbadge hide" id="pub-badge"></span></span></span>
       </button>
     </div>
@@ -158,7 +158,7 @@
   <div class="ihead">
     <button class="back" id="ci-back" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5.5 4.5 12l6.5 6.5"/></svg></button>
     <span class="ihsp"></span>
-    <button class="cmore" id="ci-more" type="button" aria-label="More" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
+    <button class="cmore hide" id="ci-edit" type="button" aria-label="Edit chat"><svg class="pen" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
   </div>
   <div class="ibody" id="ci-body">
     <div class="ihero">
@@ -171,17 +171,35 @@
       <button class="iact" id="ci-mute" type="button"><svg class="ic-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 1.8H4.4z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg><svg class="ic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5.9A6 6 0 0 1 18 11v4.2M6 9.6v6.9l-1.6 1.8H16"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/><path d="M3.5 3.5l17 17"/></svg><span id="ci-mute-l">Mute</span></button>
       <button class="iact" id="ci-find" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><span>Search</span></button>
     </div>
+    <div class="icard iabout idesc hide" id="ci-desc"></div>
     <div class="icard iabout hide" id="ci-about"></div>
     <div class="itabs hide" id="ci-tabs" role="tablist"><button class="on" id="ci-tab-m" type="button" role="tab" aria-selected="true">Members</button><button id="ci-tab-l" type="button" role="tab" aria-selected="false">Links</button></div>
     <div class="icard ilist hide" id="ci-members"></div>
     <div class="icard ilist hide" id="ci-links"></div>
   </div>
-  <div class="cpopbg hide" id="ci-popbg"></div>
-  <div class="cpop hide" id="ci-pop" role="menu">
-    <button class="cpop-b" id="ci-pmute" type="button" role="menuitem"><svg class="ic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9.5a3.6 3.6 0 0 1 .9 4.6M18.3 7a7.2 7.2 0 0 1 1 9.4"/><path d="M3.5 3.5l17 17"/></svg><svg class="ic-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6M18.3 6.6a7.6 7.6 0 0 1 0 10.8"/></svg><span id="ci-pmute-l">Mute</span></button>
-    <div class="cpop-sep"></div>
-    <button class="cpop-b" id="ci-pfind" type="button" role="menuitem"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><span>Search</span></button>
+</section>
+
+<!-- Edit the public chat (admins): Telegram-style Edit screen, opened by the ✏️ on the chat info page -->
+<section id="v-edit" class="screen info edit hide" aria-label="Edit chat">
+  <div class="ehead">
+    <button class="back" id="ed-back" type="button" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5.5 4.5 12l6.5 6.5"/></svg></button>
+    <div class="etitle">Edit</div>
+    <button class="esave" id="ed-save" type="button">Save</button>
   </div>
+  <div class="ebody" id="ed-body">
+    <div class="icard ecard">
+      <div class="erow1">
+        <button class="eavb" id="ed-avb" type="button" aria-label="Set New Photo"><span class="av eav" id="ed-av"></span></button>
+        <label class="ename" id="ed-namef"><input id="ed-name" type="text" maxlength="64" placeholder="Chat name" autocomplete="off" aria-label="Chat name" enterkeyhint="next"><button class="emo" id="ed-emo" type="button" aria-label="Emoji"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2"/><circle cx="9" cy="10" r=".9" class="dot"/><circle cx="15" cy="10" r=".9" class="dot"/></svg></button></label>
+      </div>
+      <button class="ephoto" id="ed-photo" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12.5V8.5a2 2 0 0 0-2-2h-2.2l-1.5-2.2H9.7L8.2 6.5H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h8"/><circle cx="12" cy="12.6" r="3.4"/><path d="M19 15.5v6M16 18.5h6"/></svg><span>Set New Photo</span></button>
+      <input id="ed-file" type="file" accept="image/*" class="hide" aria-hidden="true" tabindex="-1">
+      <div class="esep"></div>
+      <textarea id="ed-desc" rows="1" maxlength="255" placeholder="Description (optional)" aria-label="Description (optional)"></textarea>
+    </div>
+    <div class="msg err hide" id="ed-msg"></div>
+  </div>
+  <div class="emopanel hide" id="ed-emop"><div class="emotabs" id="ed-emot"></div><div class="emogrid" id="ed-emog"></div></div>
 </section>
 
 <!-- Message menu -->

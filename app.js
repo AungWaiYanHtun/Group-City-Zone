@@ -675,6 +675,67 @@
     return false;
   }
 
+  // ---------- public chat settings: name / photo / description (admins edit them; everyone sees them) ----------
+  // Cached on this device (gc_pubchat) so the Messages row and the chat header render at once; the summary's
+  // settingsV says when the server copy changed, and only then is ?view=settings fetched.
+  var PUBKEY = "gc_pubchat", PUB_NAME = "Group City Chat", NAME_MAX = 64, DESC_MAX = 255;
+  var pubCur = null, pubBusy = false;
+  function photoOk(u) { u = String(u || ""); return /^data:image\/jpeg;base64,[A-Za-z0-9+\/]+={0,2}$/.test(u) || safeUrl(u) ? u : ""; }
+  function cleanPub(o) {
+    o = o && typeof o === "object" ? o : {};
+    return { name: String(o.name || "").replace(/\s+/g, " ").trim().slice(0, NAME_MAX) || PUB_NAME, photo: photoOk(o.photo),
+      description: String(o.description || "").slice(0, DESC_MAX), v: String(o.v || "") };
+  }
+  function pubInfo() {
+    if (!pubCur) { var o = null; try { o = JSON.parse(localStorage.getItem(PUBKEY) || "null"); } catch (e) {} pubCur = cleanPub(o); }
+    return pubCur;
+  }
+  function setPubInfo(o) {
+    pubCur = cleanPub(o);
+    var custom = pubCur.v || pubCur.photo || pubCur.description || pubCur.name !== PUB_NAME;
+    try { if (custom) localStorage.setItem(PUBKEY, JSON.stringify(pubCur)); else localStorage.removeItem(PUBKEY); }
+    catch (e) { try { localStorage.setItem(PUBKEY, JSON.stringify(Object.assign({}, pubCur, { photo: "", v: "" }))); } catch (e2) {} }
+    applyPubInfo();
+  }
+  function isAdminNow() { var c = getChat(); return !!(c && c.isAdmin); }
+  // round chat avatar: the custom photo, else the blue 💬
+  function pubAvatar(cls, photo) {
+    photo = photo === undefined ? pubInfo().photo : photo;
+    var a = el("span", cls, photo ? "" : "💬"); a.style.background = "#3d8bd9";
+    if (photo) {
+      var img = document.createElement("img");
+      img.alt = ""; img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%";
+      img.onerror = function () { if (img.parentNode) img.parentNode.removeChild(img); a.textContent = "💬"; };
+      img.src = photo; a.appendChild(img);
+    }
+    return a;
+  }
+  var pubAvDefault = null;   // the Messages row's own icon, put back when the photo is removed
+  function swapAv(id, next) { var cur = $(id); next.id = id; if (cur && cur !== next && cur.parentNode) cur.parentNode.replaceChild(next, cur); }
+  // puts the current name / photo everywhere the public chat shows: Messages row, chat header, info page
+  function applyPubInfo() {
+    var p = pubInfo();
+    if (!pubAvDefault) pubAvDefault = $("pub-av");
+    $("pub-name").textContent = p.name;
+    swapAv("pub-av", p.photo ? pubAvatar("av cav") : pubAvDefault);
+    if (ch && ch.room === "public") { swapAv("ch-av", pubAvatar("av cav")); $("ch-title").textContent = p.name; }
+    if (info && info.kind === "group") { infoAvatar(info); $("ci-name").textContent = p.name; renderInfoPub(); }
+    if (typeof filterChats === "function" && current === "msg") filterChats();
+  }
+  function syncPubInfo(v) {
+    v = String(v || "");
+    if (v === pubInfo().v) return;
+    if (!v) { setPubInfo(null); return; }        // no settings saved (or the table is not there yet): defaults
+    fetchPubInfo();
+  }
+  function fetchPubInfo() {
+    if (pubBusy || !chatReady()) return; pubBusy = true;
+    chatApi("/api/chat?view=settings").then(function (d) {
+      pubBusy = false;
+      if (d && d.ok && d.settings) setPubInfo(d.settings);
+    }).catch(function () { pubBusy = false; });
+  }
+
   // ---------- Messages list ----------
   function preview(m, who) { return m ? (m.mine ? "You: " : (who ? who + ": " : "")) + String(m.text || "").replace(/\s+/g, " ") : ""; }
   function renderMsgTab() {
@@ -688,11 +749,11 @@
     loadSummary(false);
   }
   // Messages search: filter the chat rows by name / last message (live, as you type)
-  var CHAT_ROWS = [{ row: "row-support", name: "Support", prev: "sup-prev" }, { row: "row-public", name: "Group City Chat", prev: "pub-prev" }];
+  var CHAT_ROWS = [{ row: "row-support", name: "Support", prev: "sup-prev" }, { row: "row-public", name: "Group City Chat", nameEl: "pub-name", prev: "pub-prev" }];
   function filterChats() {
     var q = sq.msg.trim().toLowerCase(), shown = 0;
     CHAT_ROWS.forEach(function (r) {
-      var hit = !q || (r.name + "\n" + $(r.prev).textContent).toLowerCase().indexOf(q) >= 0;
+      var hit = !q || ((r.nameEl ? $(r.nameEl).textContent : r.name) + "\n" + $(r.prev).textContent).toLowerCase().indexOf(q) >= 0;
       $(r.row).classList.toggle("hide", !hit); if (hit) shown++;
     });
     $("msg-none").classList.toggle("hide", !(q && !shown && !$("chats").classList.contains("hide")));
@@ -769,6 +830,7 @@
       $("sup-time").textContent = s ? listTime(s.at) : "";
       var badge = $("sup-badge"), n = Number(d.waiting) || 0;
       setCount(badge, $("sup-time"), admin ? n : 0, false, false);
+      if (d.settingsV !== undefined) syncPubInfo(d.settingsV);
       filterChats();
       warmFromSummary(d, admin);
     }).catch(function () { if (quiet) return; var m = $("chats-msg"); m.className = "msg err"; m.textContent = "Couldn't connect. Check your connection."; });
@@ -798,14 +860,15 @@
     $(id).classList.add("hide"); screens = screens.filter(function (x) { return x !== id; });
     if (id === "v-chat") { stopPoll(); closePop(); closeSearch(true); }
     if (id === "v-threads") stopThreadPoll();
-    if (id === "v-info") { closeInfoPop(); info = null; }
+    if (id === "v-info") info = null;
+    if (id === "v-edit") { edShowEmo(false); ed = null; }
     syncBack();
   }
   function goBack() {
     var top = screens[screens.length - 1]; if (!top) return;
     if (top === "v-chat" && popOpen()) { closePop(); return; }
     if (top === "v-chat" && srch.on) { closeSearch(); return; }
-    if (top === "v-info" && infoPopOpen()) { closeInfoPop(); return; }
+    if (top === "v-edit" && !$("ed-emop").classList.contains("hide")) { edShowEmo(false); return; }
     closeScreen(top);
     if (top === "v-info" && screens[screens.length - 1] === "v-chat") { muteUi(); fetchMsgs(false); return; }
     if (top === "v-chat" && screens.indexOf("v-threads") >= 0) { loadThreads(); startThreadPoll(); }
@@ -868,7 +931,7 @@
     ch = { room: o.room, uid: o.uid || "", msgs: [], pend: [], admin: !!getChat().isAdmin, loaded: false, cached: false, slow: false, sub: "",
       info: { title: o.title || "", username: o.username || "", photo: o.photo || "", seed: o.seed || "" } };
     var hav = $("ch-av"), nav;
-    if (o.room === "public") { nav = el("span", "av cav", "💬"); nav.style.background = "#3d8bd9"; $("ch-title").textContent = "Group City Chat"; $("ch-sub").textContent = "Everyone on Group City"; }
+    if (o.room === "public") { nav = pubAvatar("av cav"); $("ch-title").textContent = pubInfo().name; $("ch-sub").textContent = "Everyone on Group City"; }
     else if (o.uid) { nav = avatar(o.photo, o.title, o.seed, "av cav"); $("ch-title").textContent = o.title || "User"; $("ch-sub").textContent = o.sub || "Support thread"; }
     else { nav = el("span", "av cav", "🆘"); nav.style.background = "#e5534b"; $("ch-title").textContent = "Support"; $("ch-sub").textContent = "Ask the Group City team anything"; }
     nav.id = "ch-av"; hav.parentNode.replaceChild(nav, hav);
@@ -1086,21 +1149,10 @@
   // support = a user's own support chat; user = an admin's view of one user's support thread
   var info = null;                 // {kind, tab, my chat}
   var MEMBERS_TTL = 60000, memCache = null, linkCache = null, infoBusy = { m: false, l: false, u: false };
-  function infoPopOpen() { return !$("ci-pop").classList.contains("hide"); }
-  function closeInfoPop() {
-    $("ci-pop").classList.add("hide"); $("ci-popbg").classList.add("hide");
-    $("ci-more").classList.remove("on"); $("ci-more").setAttribute("aria-expanded", "false");
-  }
-  function openInfoPop() {
-    infoMuteUi();
-    $("ci-pop").classList.remove("hide"); $("ci-popbg").classList.remove("hide");
-    $("ci-more").classList.add("on"); $("ci-more").setAttribute("aria-expanded", "true");
-  }
   function infoMuteUi() {
     var m = !!ch && isMuted(ch.room, ch.uid);
     $("ci-mute").classList.toggle("muted", m); $("ci-mute-l").textContent = m ? "Unmute" : "Mute";
     $("ci-mute").setAttribute("aria-pressed", m ? "true" : "false");
-    $("ci-pmute").classList.toggle("muted", m); $("ci-pmute-l").textContent = m ? "Unmute" : "Mute";
   }
   function n0(n) { n = Number(n) || 0; try { return n.toLocaleString("en-US"); } catch (e) { return String(n); } }
   function countLine(d) {
@@ -1122,7 +1174,7 @@
   }
   function infoAvatar(o) {
     var a;
-    if (o.kind === "group") { a = el("span", "av iav", "💬"); a.style.background = "#3d8bd9"; }
+    if (o.kind === "group") a = pubAvatar("av iav");
     else if (o.kind === "support") { a = el("span", "av iav", "🆘"); a.style.background = "#e5534b"; }
     else a = avatar(ch.info.photo, ch.info.title, ch.info.seed, "av iav");
     a.id = "ci-av";
@@ -1134,15 +1186,16 @@
     var kind = ch.room === "public" ? "group" : (ch.uid ? "user" : "support");
     info = { kind: kind, tab: "m", ch: ch };
     infoAvatar(info);
-    $("ci-name").textContent = kind === "group" ? "Group City Chat" : kind === "support" ? "Group City Support" : (ch.info.title || "User");
+    $("ci-name").textContent = kind === "group" ? pubInfo().name : kind === "support" ? "Group City Support" : (ch.info.title || "User");
     $("ci-sub").textContent = kind === "group" ? (memFresh(true) ? countLine(memCache.d) : "Everyone on Group City") : kind === "support" ? "Support" : "last seen recently";
     $("ci-sub").classList.remove("on");
     $("ci-tabs").classList.toggle("hide", kind !== "group");
     $("ci-members").classList.toggle("hide", kind !== "group");
     $("ci-links").classList.add("hide");
     $("ci-about").classList.toggle("hide", kind !== "user");
+    renderInfoPub();
     infoTab("m", true);
-    infoMuteUi(); closeInfoPop();
+    infoMuteUi();
     $("ci-body").scrollTop = 0;
     openScreen("v-info");
     if (kind === "group") loadMembers(false);
@@ -1289,14 +1342,136 @@
   $("ci-back").onclick = goBack;
   $("ci-msg").onclick = goBack;                                   // Message = back to the chat
   $("ci-mute").onclick = function () { toggleMute(); };
-  function infoSearch() { closeInfoPop(); if (screens[screens.length - 1] === "v-info") goBack(); if (screens[screens.length - 1] === "v-chat") openSearch(); }
+  function infoSearch() { if (screens[screens.length - 1] === "v-info") goBack(); if (screens[screens.length - 1] === "v-chat") openSearch(); }
   $("ci-find").onclick = infoSearch;
-  $("ci-more").onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); if (infoPopOpen()) closeInfoPop(); else openInfoPop(); };
-  $("ci-popbg").onclick = closeInfoPop;
-  $("ci-pmute").onclick = function () { toggleMute(); closeInfoPop(); };
-  $("ci-pfind").onclick = infoSearch;
+  $("ci-edit").onclick = function () { openEdit(); };
   $("ci-tab-m").onclick = function () { infoTab("m"); };
   $("ci-tab-l").onclick = function () { infoTab("l"); };
+
+  // ---------- Edit the public chat (admins): name, photo, description — Telegram-style Edit screen ----------
+  // The photo is cut to a centre square and made a 320x320 JPEG on this device before it is sent.
+  var ed = null;                     // {photo: undefined (unchanged) | "" | data url, busy, sel}
+  var PHOTO_PX = 320, PHOTO_SOFT = 80000, PHOTO_HARD = 160000;   // data-url length: ~60 KB target, < 120 KB hard
+  function renderInfoPub() {
+    var grp = !!info && info.kind === "group", p = pubInfo(), box = $("ci-desc");
+    $("ci-edit").classList.toggle("hide", !(grp && isAdminNow()));
+    box.textContent = "";
+    var show = grp && !!p.description.trim();
+    box.classList.toggle("hide", !show);
+    if (!show) return;
+    var r = el("div", "iarow"), t = el("div", "iav1 idtx");
+    t.appendChild(linkify(p.description.trim()));
+    r.appendChild(t); r.appendChild(el("div", "ial", "Description")); box.appendChild(r);
+  }
+  function edPhoto() { return ed && ed.photo !== undefined ? ed.photo : pubInfo().photo; }
+  function edAvatar() { swapAv("ed-av", pubAvatar("av eav", edPhoto())); }
+  function edMsg(text) { var m = $("ed-msg"); m.textContent = text || ""; m.classList.toggle("hide", !text); }
+  function edGrow() { var t = $("ed-desc"); t.style.height = "auto"; t.style.height = Math.min(Math.max(t.scrollHeight, 24), 160) + "px"; }
+  function edBusy(on) { if (ed) ed.busy = on; $("ed-save").disabled = on; $("ed-save").classList.toggle("busy", on); }
+  function openEdit() {
+    if (!info || info.kind !== "group" || !isAdminNow()) return;
+    var p = pubInfo();
+    ed = { photo: undefined, busy: false, sel: null };
+    $("ed-name").value = p.name; $("ed-desc").value = p.description;
+    edAvatar(); edMsg(""); edBusy(false); edShowEmo(false);
+    $("ed-body").scrollTop = 0;
+    openScreen("v-edit");
+    edGrow();
+  }
+  function loadImage(file) {
+    return new Promise(function (resolve, reject) {
+      var U = window.URL || window.webkitURL, url;
+      try { url = U.createObjectURL(file); } catch (e) { reject(e); return; }
+      var img = new Image(), done = function () { try { U.revokeObjectURL(url); } catch (e) {} };
+      img.onload = function () { done(); resolve(img); };
+      img.onerror = function () { done(); reject(new Error("image")); };
+      img.src = url;
+    });
+  }
+  function squareJpeg(img) {
+    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    if (!w || !h) throw new Error("empty image");
+    var s = Math.min(w, h), c = document.createElement("canvas"); c.width = PHOTO_PX; c.height = PHOTO_PX;
+    var g = c.getContext("2d");
+    g.fillStyle = "#ffffff"; g.fillRect(0, 0, PHOTO_PX, PHOTO_PX);            // transparent PNGs: white, not black
+    try { g.imageSmoothingQuality = "high"; } catch (e) {}
+    g.drawImage(img, (w - s) / 2, (h - s) / 2, s, s, 0, 0, PHOTO_PX, PHOTO_PX);
+    var q = 0.85, url = c.toDataURL("image/jpeg", q);
+    while (url.length > PHOTO_SOFT && q > 0.5) { q = Math.round((q - 0.1) * 100) / 100; url = c.toDataURL("image/jpeg", q); }
+    if (!/^data:image\/jpeg;base64,/.test(url) || url.length > PHOTO_HARD) throw new Error("jpeg");
+    return url;
+  }
+  function resizePhoto(file) { return loadImage(file).then(squareJpeg); }
+  function pickPhoto() { if (!ed || ed.busy) return; edShowEmo(false); var f = $("ed-file"); f.value = ""; f.click(); }
+  $("ed-photo").onclick = pickPhoto;
+  $("ed-avb").onclick = pickPhoto;
+  $("ed-file").addEventListener("change", function () {
+    var f = $("ed-file").files && $("ed-file").files[0];
+    if (!f || !ed) return;
+    if (f.type && !/^image\//i.test(f.type)) { edMsg("Choose a photo (image file)."); return; }
+    var my = ed; edMsg("");
+    resizePhoto(f).then(function (url) { if (ed === my) { ed.photo = url; edAvatar(); } },
+      function () { if (ed === my) edMsg("Couldn't read this photo. Try another one."); });
+  });
+  function edSave() {
+    if (!ed || ed.busy) return;
+    edShowEmo(false);
+    var name = $("ed-name").value.replace(/\s+/g, " ").trim(), desc = $("ed-desc").value.replace(/\r\n?/g, "\n").trim();
+    if (!name) { edMsg("Enter a chat name."); try { $("ed-name").focus(); } catch (e) {} return; }
+    if (name.length > NAME_MAX) { edMsg("Name is too long (max " + NAME_MAX + " characters)."); return; }
+    if (desc.length > DESC_MAX) { edMsg("Description is too long (max " + DESC_MAX + " characters)."); return; }
+    var body = { action: "settings", name: name, description: desc };
+    if (ed.photo !== undefined) body.photo = ed.photo;
+    var my = ed; edBusy(true); edMsg("");
+    chatApi("/api/chat?action=settings", { body: body }).then(function (d) {
+      if (ed !== my) return;
+      edBusy(false);
+      if (d._status === 401) { closeAllScreens(); chatExpired(); return; }
+      if (!d.ok || !d.settings) {
+        if (d._status === 403) { var c = getChat(); if (c) { c.isAdmin = false; setChat(c); } renderInfoPub(); }
+        edMsg(d.message || "Couldn't save. Please try again."); return;
+      }
+      setPubInfo(d.settings);
+      if (screens[screens.length - 1] === "v-edit") goBack();          // back to the info page, already updated
+    }).catch(function () { if (ed === my) { edBusy(false); edMsg("Couldn't connect. Check your connection."); } });
+  }
+  $("ed-save").onclick = edSave;
+  $("ed-back").onclick = goBack;
+  // emoji button in the name field: the same EMOJI list as the chat's panel
+  var edEmoCat = 0;
+  function edEmoGrid() {
+    var g = $("ed-emog"); g.textContent = ""; g.scrollTop = 0;
+    EMOJI[edEmoCat][1].split(" ").forEach(function (e) {
+      if (!e) return; var b = el("button", null, e); b.type = "button";
+      b.onclick = function () { edInsert(e); };
+      g.appendChild(b);
+    });
+    var tb = $("ed-emot").children; for (var i = 0; i < tb.length; i++) tb[i].classList.toggle("on", i === edEmoCat);
+  }
+  function edInsert(e) {
+    var t = $("ed-name"), v = t.value, s = ed && ed.sel ? ed.sel[0] : v.length, en = ed && ed.sel ? ed.sel[1] : v.length;
+    if (v.length - (en - s) + e.length > NAME_MAX) return;
+    t.value = v.slice(0, s) + e + v.slice(en); if (ed) ed.sel = [s + e.length, s + e.length];
+  }
+  function edShowEmo(on) {
+    $("ed-emop").classList.toggle("hide", !on); $("ed-emo").classList.toggle("on", on);
+    if (!on) return;
+    var t = $("ed-name"), n = t.value.length;
+    if (ed) ed.sel = [typeof t.selectionStart === "number" ? t.selectionStart : n, typeof t.selectionEnd === "number" ? t.selectionEnd : n];
+    try { t.blur(); } catch (e) {}
+    if (!$("ed-emot").children.length) EMOJI.forEach(function (c, i) { var b = el("button", null, c[0]); b.type = "button"; b.onclick = function () { edEmoCat = i; edEmoGrid(); }; $("ed-emot").appendChild(b); });
+    edEmoGrid();
+  }
+  $("ed-emo").addEventListener("click", function (e) {
+    if (e && e.preventDefault) e.preventDefault();       // inside the <label>: don't focus the input
+    var on = $("ed-emop").classList.contains("hide"); edShowEmo(on); if (!on) { try { $("ed-name").focus(); } catch (x) {} }
+  });
+  $("ed-name").addEventListener("focus", function () { edShowEmo(false); if (ed) ed.sel = null; });
+  $("ed-name").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); try { $("ed-desc").focus(); } catch (x) {} } });
+  $("ed-desc").addEventListener("focus", function () { edShowEmo(false); });
+  $("ed-desc").addEventListener("input", edGrow);
+  window.gcTest = window.gcTest || {};
+  window.gcTest.resizePhoto = resizePhoto;       // read-only hook for tests / debugging
 
   // ---------- in-chat search: highlights matches in the loaded messages, ▲/▼ walk them (newest first) ----------
   function escRe(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
@@ -1360,7 +1535,7 @@
   $("ch-sup").onclick = function () { searchGo(srch.cur - 1); };      // older
   $("ch-sdown").onclick = function () { searchGo(srch.cur + 1); };    // newer
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && screens[screens.length - 1] === "v-info") { goBack(); return; }
+    if (e.key === "Escape" && (screens[screens.length - 1] === "v-info" || screens[screens.length - 1] === "v-edit")) { goBack(); return; }
     if (e.key !== "Escape" || screens[screens.length - 1] !== "v-chat") return;
     if (popOpen()) closePop(); else if (srch.on && document.activeElement !== $("ch-q")) closeSearch();
   });
@@ -1483,6 +1658,7 @@
   if (!inTg) $("pr-note").textContent = "One payment lists one group. You pay with Telegram Stars in the bot.";
 
   chips(); catPicker(); prices(); renderAccount(); netUpdate(); searchBar();
+  applyPubInfo();   // cached custom name / photo of the public chat on the Messages row
   var sp = (inTg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || (new URLSearchParams(location.search).get("tab") || "");
   if (sp === "promote") promote(); else if (sp === "mine" || sp === "profile" || sp === "msg") tab(sp);
   if (inTg) tgChatLogin().then(function () { renderAccount(); refreshTab(); if (current !== "msg") loadSummary(true); });

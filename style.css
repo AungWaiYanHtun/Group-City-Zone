@@ -377,9 +377,9 @@ html .screen.info,html.dark .screen.info{background:var(--sec);background-image:
 @media (hover:hover){.iact:hover{background:color-mix(in srgb,var(--card) 94%,var(--text))}}
 .iact svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .iact span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-#ci-mute .ic-off,#ci-pmute .ic-off{display:none}
-#ci-mute.muted .ic-off,#ci-pmute.muted .ic-off{display:block}
-#ci-mute.muted .ic-on,#ci-pmute.muted .ic-on{display:none}
+#ci-mute .ic-off{display:none}
+#ci-mute.muted .ic-off{display:block}
+#ci-mute.muted .ic-on{display:none}
 .icard{background:var(--card);border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .iabout{padding:4px 0;margin-bottom:12px}
 .iarow{padding:9px 18px}
@@ -408,4 +408,33 @@ html.dark .ilk{color:#6ab3f3}
 .iempty b{display:block;color:var(--text);font-size:15px;font-weight:600;margin-bottom:3px}
 .ifoot{padding:10px 16px 8px;font-size:13px;color:var(--hint);text-align:center}
 .ilist .cload{margin:18px auto}
-#ci-pop{top:calc(58px + env(safe-area-inset-top))}
+/* ---------- v11: description card on the chat info page + admin Edit screen (Telegram Android "Edit") ---------- */
+.idesc{margin-bottom:12px}
+.idtx{white-space:pre-wrap;line-height:1.38}
+.idtx .mlink{color:#168acd;text-decoration:none}
+html.dark .idtx .mlink{color:#6ab3f3}
+#ci-edit svg.pen{width:22px;height:22px;fill:currentColor}
+html .screen.info.edit{z-index:17}
+.ehead{position:relative;z-index:2;display:flex;align-items:center;gap:8px;padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top));flex:none}
+.etitle{flex:1;min-width:0;text-align:center;font-size:20px;font-weight:600;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.esave{flex:none;min-width:46px;height:46px;padding:0 20px;border:0;border-radius:23px;background:var(--floatbg);color:var(--text);font:inherit;font-size:17px;font-weight:500;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.14)}
+.esave:active{background:color-mix(in srgb,var(--floatbg) 86%,var(--text))}
+.esave.busy,.esave:disabled{opacity:.55;cursor:default}
+.ebody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:6px 12px calc(20px + env(safe-area-inset-bottom))}
+.ecard{padding:0}
+.erow1{display:flex;align-items:center;gap:16px;padding:16px 16px 10px 16px}
+.eavb{flex:none;padding:0;border:0;background:none;border-radius:50%;cursor:pointer}
+.eav{width:70px;height:70px;font-size:30px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.ename{flex:1;min-width:0;display:flex;align-items:center;gap:4px;border-bottom:2px solid var(--sep);transition:border-color .15s}
+.ename:focus-within{border-bottom-color:var(--accent)}
+.ename input{flex:1;min-width:0;height:46px;border:0;outline:0;background:none;color:var(--text);font:inherit;font-size:18px;padding:0;-webkit-appearance:none;appearance:none}
+.ename input::placeholder{color:var(--hint);opacity:1}
+.ename .emo{width:40px;height:40px}
+.ephoto{display:flex;align-items:center;gap:26px;width:100%;padding:12px 18px;border:0;background:none;color:var(--accent);font:inherit;font-size:17px;font-weight:500;text-align:left;cursor:pointer}
+.ephoto:active{background:var(--soft)}
+@media (hover:hover){.ephoto:hover{background:var(--soft)}}
+.ephoto svg{width:28px;height:28px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.esep{height:1px;background:var(--sep);margin-left:16px}
+#ed-desc{display:block;width:100%;min-height:24px;max-height:160px;resize:none;border:0;outline:0;background:none;color:var(--text);font:inherit;font-size:16px;line-height:1.45;padding:14px 18px 16px;overflow-y:auto}
+#ed-desc::placeholder{color:var(--hint);opacity:1}
+.ebody .msg.err{margin:12px 4px 0}
