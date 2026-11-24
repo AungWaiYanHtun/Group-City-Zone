@@ -111,7 +111,95 @@
   function saveChatLogin(d) {
     if (!d || !d.ok || typeof d.token !== "string") return false;
     setChat({ token: d.token, exp: d.exp, user: d.user || {}, isAdmin: !!d.isAdmin });
+    clearMsgCache(cacheOwner());      // another account's cached chats never stay on this device
     return true;
+  }
+  // ---------- per-chat message cache (this device; Telegram-style instant open) ----------
+  // key gc_cache:<my user id>:<room>[:<thread uid>] → {o: owner, t: saved at, m: [compact messages]} (last 100)
+  var CPFX = "gc_cache:", CACHE_MAX = 100, CACHE_KEYS = 24;
+  function cacheOwner() { var c = getChat(); return c && c.user && c.user.id != null && String(c.user.id) !== "" ? String(c.user.id) : ""; }
+  function cacheKey(room, uid) { var o = cacheOwner(); return o ? CPFX + o + ":" + room + (uid ? ":" + uid : "") : ""; }
+  function lsKeys() {
+    var out = [];
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k != null) out.push(k); } } catch (e) {}
+    return out;
+  }
+  function packMsg(m) {
+    var x = { i: m.id, t: String(m.text || ""), a: m.at || "" };
+    if (m.u) x.u = m.u; if (m.mine) x.m = 1; if (m.name) x.n = m.name; if (m.admin) x.d = 1; if (m.photo) x.p = m.photo;
+    return x;
+  }
+  function unpackMsg(x) { return { id: Number(x.i), text: x.t || "", at: x.a || "", u: x.u || "", mine: !!x.m, name: x.n || "", admin: !!x.d, photo: x.p || "" }; }
+  function readCache(room, uid) {
+    var k = cacheKey(room, uid); if (!k) return null;
+    try {
+      var o = JSON.parse(localStorage.getItem(k) || "null");
+      if (!o || o.o !== cacheOwner() || !Array.isArray(o.m)) return null;
+      return o.m.filter(function (x) { return x && Number(x.i) > 0; }).map(unpackMsg);
+    } catch (e) { return null; }
+  }
+  function writeCache(room, uid, msgs) {
+    var k = cacheKey(room, uid); if (!k) return;
+    var keep = (msgs || []).filter(function (m) { return m && !m.pend && Number(m.id) > 0; }).slice(-CACHE_MAX);
+    var put = function (list) { localStorage.setItem(k, JSON.stringify({ o: cacheOwner(), t: Date.now(), m: list.map(packMsg) })); };
+    try { put(keep); }
+    catch (e) {                         // quota: drop the other cached chats, then try a smaller copy
+      try { lsKeys().forEach(function (x) { if (x.indexOf(CPFX) === 0 && x !== k) localStorage.removeItem(x); }); put(keep.slice(-50)); }
+      catch (e2) { try { localStorage.removeItem(k); } catch (e3) {} }
+    }
+    pruneCache(k);
+  }
+  function pruneCache(keepKey) {      // admins open many support threads: keep only the newest CACHE_KEYS chats
+    var ks = lsKeys().filter(function (x) { return x.indexOf(CPFX) === 0; });
+    if (ks.length <= CACHE_KEYS) return;
+    var aged = ks.filter(function (x) { return x !== keepKey; }).map(function (x) {
+      var t = 0; try { t = Number((JSON.parse(localStorage.getItem(x) || "{}") || {}).t) || 0; } catch (e) {}
+      return { k: x, t: t };
+    }).sort(function (a, b) { return a.t - b.t; });
+    aged.slice(0, ks.length - CACHE_KEYS).forEach(function (x) { try { localStorage.removeItem(x.k); } catch (e) {} });
+  }
+  // keep = owner id whose caches stay ("" = remove every cached chat, e.g. on log out)
+  function clearMsgCache(keep) {
+    lsKeys().forEach(function (x) { if (x.indexOf(CPFX) === 0 && (!keep || x.indexOf(CPFX + keep + ":") !== 0)) { try { localStorage.removeItem(x); } catch (e) {} } });
+  }
+  // merges a /api/chat read into a message list: new ids appended, ones the server no longer has (deleted) dropped
+  function mergeMsgs(list, d) {
+    var out = list.slice(), changed = false, ids = {}, incoming = 0;
+    out.forEach(function (m) { ids[m.id] = true; });
+    (Array.isArray(d.messages) ? d.messages : []).forEach(function (m) { if (m && m.id && !ids[m.id]) { out.push(m); ids[m.id] = true; changed = true; if (!m.mine) incoming++; } });
+    if (Array.isArray(d.live)) {
+      var live = {}, min = Infinity, max = 0;
+      d.live.forEach(function (x) { live[x] = true; if (x < min) min = x; if (x > max) max = x; });
+      var before = out.length;
+      // drop only messages inside the live window that the server no longer has (deleted)
+      out = out.filter(function (m) { return live[m.id] || m.id > max || (d.live.length && m.id < min); });
+      if (out.length !== before) changed = true;
+    }
+    out.sort(function (a, b) { return a.id - b.id; });
+    return { msgs: out, changed: changed, incoming: incoming };
+  }
+  function roomQuery(room, uid, after) {
+    var q = "/api/chat?room=" + encodeURIComponent(room);
+    if (uid) q += "&uid=" + encodeURIComponent(uid);
+    if (after) q += "&after=" + encodeURIComponent(after);
+    return q;
+  }
+  // background warm-up of one chat's cache (at most one request per Messages-summary cycle)
+  var warmBusy = false;
+  function warmChat(room, uid) {
+    if (warmBusy || !chatReady()) return;
+    if (ch && ch.room === room && ch.uid === (uid || "") && screens.indexOf("v-chat") >= 0) return;   // open chat polls itself
+    var c0 = readCache(room, uid) || [], last = c0.length ? c0[c0.length - 1].id : 0, owner = cacheOwner();
+    warmBusy = true;
+    chatApi(roomQuery(room, uid, last)).then(function (d) {
+      warmBusy = false;
+      if (!d || !d.ok || cacheOwner() !== owner) return;
+      var cur = readCache(room, uid) || [];
+      // stale by a full page or more: start from the latest page (the next cycle can't fill a gap from the middle)
+      if (last && Array.isArray(d.messages) && d.messages.length >= CACHE_MAX) cur = [];
+      if (!last) cur = [];
+      writeCache(room, uid, mergeMsgs(cur, d).msgs);
+    }).catch(function () { warmBusy = false; });
   }
   var chatState = "idle";   // inside Telegram: idle | pending | ok | fail
   var chatFailMsg = "";
@@ -272,6 +360,7 @@
       else if (ce) loginMsg("Logged in. Chat and support are not available right now (" + ce + ")", "err");
       else loginMsg("", "");
       mineLoaded = false; renderAccount(); showPromote(); refreshTab();
+      if (!ce && current !== "msg") loadSummary(true);   // badge + warm the chat cache so the first open is instant
     });
   };
   function loginMsg(text, kind) {
@@ -572,7 +661,18 @@
       $("sup-time").textContent = s ? listTime(s.at) : "";
       var badge = $("sup-badge"), n = Number(d.waiting) || 0;
       setCount(badge, $("sup-time"), admin ? n : 0, false, false);
+      warmFromSummary(d, admin);
     }).catch(function () { if (quiet) return; var m = $("chats-msg"); m.className = "msg err"; m.textContent = "Couldn't connect. Check your connection."; });
+  }
+  // picks the one chat whose cache is behind the summary (public first, then the user's own support thread)
+  function warmFromSummary(d, admin) {
+    if (screens.indexOf("v-chat") >= 0) return;
+    var need = function (room, last) {
+      if (!last || !last.id) return false;
+      var c = readCache(room, ""); return !c || !c.length || c[c.length - 1].id < Number(last.id);
+    };
+    if (need("public", d.public)) warmChat("public", "");
+    else if (!admin && need("support", d.support)) warmChat("support", "");
   }
   // keeps the Messages list and the unread badge fresh (not while a chat is open: the chat polls itself)
   setInterval(function () { if (!document.hidden && chatReady() && screens[screens.length - 1] !== "v-chat") loadSummary(true); }, 20000);
@@ -640,63 +740,72 @@
   var ch = null;              // {room, uid, msgs:[], admin}
   var pollTimer = null, pollBusy = false, sending = false, errTimer = null;
   var MAX_SHOWN = 200;
-  function chatQuery(after) {
-    var q = "/api/chat?room=" + encodeURIComponent(ch.room);
-    if (ch.uid) q += "&uid=" + encodeURIComponent(ch.uid);
-    if (after) q += "&after=" + encodeURIComponent(after);
-    return q;
-  }
+  function chatQuery(after) { return roomQuery(ch.room, ch.uid, after); }
+  function setSub(text) { $("ch-sub").textContent = text; }
+  function subNormal() { if (ch) setSub(ch.sub); }
   function openChat(o) {
     if (!chatReady()) { tab("msg"); return; }
     stopPoll(); closePop(); closeSearch(true);
-    ch = { room: o.room, uid: o.uid || "", msgs: [], admin: !!getChat().isAdmin, loaded: false };
+    ch = { room: o.room, uid: o.uid || "", msgs: [], pend: [], admin: !!getChat().isAdmin, loaded: false, cached: false, sub: "" };
     var hav = $("ch-av"), nav;
     if (o.room === "public") { nav = el("span", "av cav", "💬"); nav.style.background = "#3d8bd9"; $("ch-title").textContent = "Group City Chat"; $("ch-sub").textContent = "Everyone on Group City"; }
     else if (o.uid) { nav = avatar(o.photo, o.title, o.seed, "av cav"); $("ch-title").textContent = o.title || "User"; $("ch-sub").textContent = o.sub || "Support thread"; }
     else { nav = el("span", "av cav", "🆘"); nav.style.background = "#e5534b"; $("ch-title").textContent = "Support"; $("ch-sub").textContent = "Ask the Group City team anything"; }
     nav.id = "ch-av"; hav.parentNode.replaceChild(nav, hav);
+    ch.sub = $("ch-sub").textContent;
     muteUi();
     $("ch-text").value = ""; autoGrow(); chatErr(""); if ($("ch-emop")) { $("ch-emop").classList.add("hide"); $("ch-emo").classList.remove("on"); }
     $("ch-text").placeholder = o.room === "support" && o.uid ? "Reply as Support" : "Message";
-    var list = $("ch-list"); list.textContent = ""; list.appendChild(el("div", "cempty", "Loading…"));
+    // Telegram-style: cached messages show at once; the network read only appends what's new
+    var cached = readCache(o.room, ch.uid);
+    var list = $("ch-list"); list.textContent = "";
+    if (cached && cached.length) { ch.msgs = cached.slice(-MAX_SHOWN); ch.cached = true; renderMsgs(); }
+    else list.appendChild(smallLoader());
     openScreen("v-chat");
+    if (ch.cached) toBottom();
     fetchMsgs(true);
     startPoll();
   }
+  function smallLoader() { var d = el("div", "cload"); d.setAttribute("role", "status"); d.appendChild(el("span", "spin")); d.appendChild(el("span", null, "Loading…")); return d; }
   function lastId() { return ch && ch.msgs.length ? ch.msgs[ch.msgs.length - 1].id : 0; }
   function nearBottom() { var l = $("ch-list"); return l.scrollHeight - l.scrollTop - l.clientHeight < 90; }
   function toBottom() { var l = $("ch-list"); l.scrollTop = l.scrollHeight; }
-  function fetchMsgs(first) {
+  function fetchMsgs(first, full) {
     if (!ch || pollBusy) return;
     var my = ch; pollBusy = true;
-    var after = first ? 0 : lastId();
+    var after = full ? 0 : lastId();      // first open with a cache: only what's newer than the cache
+    var hadMsgs = ch.msgs.length > 0;
+    if (first && ch.cached) setTimeout(function () { if (ch === my && pollBusy && !ch.loaded) setSub("Updating…"); }, 1200);
     chatApi(chatQuery(after)).then(function (d) {
       pollBusy = false;
       if (ch !== my) return;
       if (d._status === 401) { closeAllScreens(); chatExpired(); return; }
-      if (!d.ok) { if (first) { var l = $("ch-list"); l.textContent = ""; l.appendChild(el("div", "cempty", d.message || "Couldn't load messages.")); } return; }
-      var changed = false, ids = {}, incoming = 0;
-      ch.msgs.forEach(function (m) { ids[m.id] = true; });
-      (Array.isArray(d.messages) ? d.messages : []).forEach(function (m) { if (m && m.id && !ids[m.id]) { ch.msgs.push(m); ids[m.id] = true; changed = true; if (!m.mine) incoming++; } });
-      if (!first && ch.loaded && incoming && !isMuted(ch.room, ch.uid)) haptic();
-      if (Array.isArray(d.live)) {
-        var live = {}, min = Infinity, max = 0;
-        d.live.forEach(function (x) { live[x] = true; if (x < min) min = x; if (x > max) max = x; });
-        var before = ch.msgs.length;
-        // drop only messages inside the live window that the server no longer has (deleted)
-        ch.msgs = ch.msgs.filter(function (m) { return live[m.id] || m.id > max || (d.live.length && m.id < min); });
-        if (ch.msgs.length !== before) changed = true;
+      if (!d.ok) {
+        if (!hadMsgs && !ch.loaded) { var l = $("ch-list"); l.textContent = ""; l.appendChild(el("div", "cempty", d.message || "Couldn't load messages.")); }
+        else if (!ch.loaded) setSub("Connecting…");
+        return;
       }
-      ch.msgs.sort(function (a, b) { return a.id - b.id; });
+      // cache is a full page or more behind: replace it with the latest page instead of filling from the middle
+      if (after && first && Array.isArray(d.messages) && d.messages.length >= CACHE_MAX) { pollBusy = false; fetchMsgs(true, true); return; }
+      var r = mergeMsgs(full ? [] : ch.msgs, d), changed = r.changed || (full && hadMsgs);
+      ch.msgs = r.msgs;
+      if (!first && ch.loaded && r.incoming && !isMuted(ch.room, ch.uid)) haptic();
       if (ch.msgs.length > MAX_SHOWN) ch.msgs = ch.msgs.slice(-MAX_SHOWN);
       if (ch.room === "public") { setSeen(lastId()); showUnread(0); }
-      if (first || changed || !ch.loaded) {
-        var stick = (first || nearBottom()) && !srch.on, l = $("ch-list"), st = l.scrollTop;
-        ch.loaded = true; renderMsgs();
-        if (srch.on) l.scrollTop = st;      // a poll while searching keeps the place and the current match
+      if (first || changed || !ch.loaded) writeCache(ch.room, ch.uid, ch.msgs);
+      var wasLoaded = ch.loaded; ch.loaded = true; subNormal();
+      if (changed || !wasLoaded && !hadMsgs || (first && !hadMsgs)) {
+        var stick = (!hadMsgs || full || nearBottom()) && !srch.on, l2 = $("ch-list"), st = l2.scrollTop;
+        renderMsgs();
+        if (srch.on) l2.scrollTop = st;      // a poll while searching keeps the place and the current match
         if (stick) toBottom();
       }
-    }).catch(function () { pollBusy = false; if (first && ch === my) { var l = $("ch-list"); l.textContent = ""; l.appendChild(el("div", "cempty", "Couldn't connect. Check your connection.")); } });
+    }).catch(function () {
+      pollBusy = false;
+      if (ch !== my) return;
+      if (!hadMsgs && !ch.loaded) { var l = $("ch-list"); l.textContent = ""; l.appendChild(el("div", "cempty", "Couldn't connect. Check your connection.")); }
+      else setSub("Connecting…");   // keep showing the cached messages
+    });
   }
   function startPoll() { stopPoll(); pollTimer = setInterval(function () { if (!document.hidden && screens[screens.length - 1] === "v-chat") fetchMsgs(false); }, 5000); }
   function stopPoll() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
@@ -708,7 +817,7 @@
 
   function renderMsgs() {
     var list = $("ch-list"); list.textContent = "";
-    var ms = ch.msgs;
+    var ms = ch.msgs.concat(ch.pend || []);
     srch.marks = [];
     try { renderList(list, ms); } finally { searchSync(false); }
   }
@@ -727,7 +836,7 @@
       var key = function (x) { return x ? (x.mine ? "me" : x.u + (x.admin ? "a" : "")) : ""; };
       var firstOfRun = !p || key(p) !== key(m) || (p && !sameDay(new Date(p.at), d));
       var lastOfRun = !n || key(n) !== key(m) || (n && !sameDay(new Date(n.at), d));
-      var row = el("div", "mrow" + (m.mine ? " me" : ""));
+      var row = el("div", "mrow" + (m.mine ? " me" : "") + (m.pend ? " pending" : "") + (m.fail ? " failed" : ""));
       if (!m.mine) {
         var av;
         if (m.admin && m.name === "Support") { av = el("span", "mav", "🆘"); av.style.background = "#e5534b"; }
@@ -743,7 +852,9 @@
         b.appendChild(nm);
       }
       var t = el("div", "btext");
-      t.appendChild(el("span", "btime", isNaN(d) ? "" : hhmm(d)));
+      var bt = el("span", "btime", isNaN(d) ? "" : hhmm(d));
+      if (m.pend) { var ck = el("span", m.fail ? "bst bfail" : "bst bclock"); ck.setAttribute("aria-label", m.fail ? "Not sent" : "Sending"); bt.appendChild(ck); }
+      t.appendChild(bt);
       srch.mid = m.id; srch.occ = 0;
       t.appendChild(linkify(String(m.text || "")));
       b.appendChild(t);
@@ -758,6 +869,7 @@
     if (text) errTimer = setTimeout(function () { e.classList.add("hide"); }, 5000);
   }
   function autoGrow() { var t = $("ch-text"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 120) + "px"; }
+  var pendSeq = 0;
   function sendMsg() {
     if (!ch || sending) return;
     var text = $("ch-text").value.replace(/\r\n?/g, "\n").trim();
@@ -765,17 +877,29 @@
     if (text.length > 1000) { chatErr("Message is too long (max 1000 characters)."); return; }
     var my = ch; sending = true; $("ch-send").disabled = true;
     var body = { action: "send", room: ch.room, text: text }; if (ch.uid) body.uid = ch.uid;
+    // optimistic bubble with a clock until the server confirms it
+    var u = anyUser() || {}, pm = { id: "p" + (++pendSeq), pend: true, text: text, at: new Date().toISOString(), u: "me", mine: true, name: u.first_name || "" };
+    ch.pend.push(pm);
+    $("ch-text").value = ""; autoGrow(); chatErr("");
+    renderMsgs(); toBottom();
+    var drop = function () { my.pend = my.pend.filter(function (x) { return x !== pm; }); };
+    var failed = function (msg) {
+      drop();
+      if (ch === my) { renderMsgs(); if (!$("ch-text").value) { $("ch-text").value = text; autoGrow(); } }   // text back in the box to retry
+      chatErr(msg);
+    };
     chatApi("/api/chat", { body: body }).then(function (d) {
       sending = false; $("ch-send").disabled = false;
-      if (d._status === 401) { closeAllScreens(); chatExpired(); return; }
-      if (!d.ok || !d.message) { chatErr(d.message || "Message was not sent."); return; }
-      $("ch-text").value = ""; autoGrow(); chatErr("");
+      if (d._status === 401) { drop(); closeAllScreens(); chatExpired(); return; }
+      if (!d.ok || !d.message) { failed(d.message || "Message was not sent."); return; }
+      drop();
+      if (!my.msgs.some(function (m) { return m.id === d.message.id; })) my.msgs.push(d.message);
+      my.msgs.sort(function (a, b) { return a.id - b.id; });
+      writeCache(my.room, my.uid, my.msgs);
       if (ch !== my) return;
-      if (!ch.msgs.some(function (m) { return m.id === d.message.id; })) ch.msgs.push(d.message);
-      ch.msgs.sort(function (a, b) { return a.id - b.id; });
       renderMsgs(); toBottom();
       fetchMsgs(false);
-    }).catch(function () { sending = false; $("ch-send").disabled = false; chatErr("Couldn't connect. Message was not sent."); });
+    }).catch(function () { sending = false; $("ch-send").disabled = false; failed("Couldn't connect. Message was not sent."); });
   }
 
   // tap a message: copy / delete
@@ -784,7 +908,7 @@
     if (window.getSelection && String(window.getSelection()).length) return; // user is selecting text
     menuMsg = m;
     $("mm-prev").textContent = String(m.text || "").slice(0, 300);
-    $("mm-del").classList.toggle("hide", !(m.mine || (getChat() && getChat().isAdmin)));
+    $("mm-del").classList.toggle("hide", !!m.pend || !(m.mine || (getChat() && getChat().isAdmin)));
     $("mmenu").classList.remove("hide");
   }
   function closeMenu() { $("mmenu").classList.add("hide"); menuMsg = null; }
@@ -795,13 +919,13 @@
     try { navigator.clipboard.writeText(t).then(function () { chatErr(""); }, function () {}); } catch (e) {}
   };
   $("mm-del").onclick = function () {
-    var m = menuMsg; closeMenu(); if (!m || !ch) return;
+    var m = menuMsg; closeMenu(); if (!m || !ch || m.pend) return;
     var my = ch;
     chatApi("/api/chat", { body: { action: "delete", id: m.id } }).then(function (d) {
       if (d._status === 401) { closeAllScreens(); chatExpired(); return; }
       if (!d.ok) { chatErr(d.message || "Couldn't delete the message."); return; }
       if (ch !== my) return;
-      ch.msgs = ch.msgs.filter(function (x) { return x.id !== m.id; }); renderMsgs();
+      ch.msgs = ch.msgs.filter(function (x) { return x.id !== m.id; }); writeCache(ch.room, ch.uid, ch.msgs); renderMsgs();
     }).catch(function () { chatErr("Couldn't connect."); });
   };
   $("ch-back").onclick = goBack;
@@ -958,7 +1082,7 @@
     if (!mineLoaded) loadMine();
   }
   function logout() {
-    setSession(null); setChat(null); mineLoaded = false;
+    clearMsgCache(""); setSession(null); setChat(null); mineLoaded = false; lastSum = null; unread = { at: "", n: 0 };
     closeAllScreens(); renderAccount(); showPromote(); refreshTab();
   }
   $("pf-logout").onclick = logout;
