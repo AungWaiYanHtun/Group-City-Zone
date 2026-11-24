@@ -141,6 +141,11 @@ function isAdmin(uid) { return uid != null && adminIds().indexOf(String(uid)) >=
 // Stable opaque id for a user (for avatar color / grouping). Never reveals the Telegram ID.
 function userHash(uid) { return hmac(sessionSecret() || "gc", "u:" + uid).toString("hex").slice(0, 12); }
 
+function missingEnv() {
+  const m = ["BOT_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SESSION_SECRET"].filter((n) => !env(n));
+  if (env("SESSION_SECRET") && !sessionSecret()) m.push("SESSION_SECRET (needs 16+ characters)");
+  return m;
+}
 function configured() {
   return !!(env("BOT_TOKEN") && env("SUPABASE_URL") && env("SUPABASE_SERVICE_KEY") && sessionSecret());
 }
@@ -152,19 +157,33 @@ async function sb(path, opts) {
   const headers = { apikey: key, "Content-Type": "application/json", Accept: "application/json" };
   if (/^eyJ/.test(key)) headers.Authorization = "Bearer " + key; // legacy JWT service_role key
   if (opts.prefer) headers.Prefer = opts.prefer;
+  if (opts.count) headers.Prefer = (headers.Prefer ? headers.Prefer + "," : "") + "count=exact";
   const r = await fetch(env("SUPABASE_URL").replace(/\/+$/, "") + "/rest/v1/" + path, {
     method: opts.method || "GET",
     headers: headers,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined
   });
   const text = await r.text();
-  if (!r.ok) { const e = new Error("supabase " + r.status + ": " + text.slice(0, 200)); e.status = r.status; throw e; }
-  if (!text) return null;
-  try { return JSON.parse(text); } catch (e) { return null; }
+  if (!r.ok) { const e = new Error("supabase " + r.status + ": " + text.slice(0, 200)); e.status = r.status; e.body = text.slice(0, 500); throw e; }
+  let data = null;
+  if (text) { try { data = JSON.parse(text); } catch (e) { data = null; } }
+  if (opts.count) {
+    // PostgREST answers "Content-Range: 0-0/57" (or "*/0") when asked for count=exact
+    const cr = String((r.headers && typeof r.headers.get === "function" && r.headers.get("content-range")) || "");
+    const m = /\/(\d+)\s*$/.exec(cr);
+    return { rows: data || [], total: m ? Number(m[1]) : (Array.isArray(data) ? data.length : 0) };
+  }
+  return data;
+}
+// True when a Supabase error means "this column does not exist" (e.g. gc_users.last_seen before supabase_update_v10.sql).
+function missingColumn(e, col) {
+  const t = String((e && (e.body || e.message)) || "");
+  return /42703|PGRST204|column .* does not exist|could not find the .* column/i.test(t) && (!col || t.indexOf(col) >= 0);
 }
 const enc = encodeURIComponent;
 
 module.exports = {
+  missingEnv,
   env, json, fail, guard, query, body, verifyInitData, verifyWidget, makeToken, readToken, authUid,
-  isAdmin, adminIds, userHash, configured, sb, enc, cleanUser
+  isAdmin, adminIds, userHash, configured, sb, enc, cleanUser, missingColumn
 };

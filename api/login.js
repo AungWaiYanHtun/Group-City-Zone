@@ -6,7 +6,7 @@ const L = require("./_lib");
 module.exports = async (req, res) => {
   try {
     if (!L.guard(req, res, ["POST"])) return;
-    if (!L.configured()) return L.fail(res, 500, "Chat is not set up yet (server settings missing).");
+    if (!L.configured()) return L.fail(res, 500, "Chat is not set up yet. Missing in Vercel: " + L.missingEnv().join(", "));
     const b = await L.body(req);
     const bot = L.env("BOT_TOKEN");
     const user = typeof b.initData === "string" ? L.verifyInitData(b.initData, bot) : L.verifyWidget(b, bot);
