@@ -31,6 +31,8 @@
   var CATS = (Array.isArray(CFG.CATEGORIES) ? CFG.CATEGORIES : []).map(function (c) { return String(c || "").trim(); })
     .filter(function (c, i, a) { return c && c !== "All" && a.indexOf(c) === i; });
   var prCat = "";                               // category picked in the Promote form ("" = not chosen yet)
+  // Telegram-style search bar under the header: one input, its own text per tab (Groups / Messages)
+  var sq = { groups: "", msg: "" };
   var SKEY = "gc_session", CKEY = "gc_chat_session";
 
   var $ = function (id) { return document.getElementById(id); };
@@ -365,14 +367,16 @@
     return c;
   }
   function match(g) {
-    var q = $("q").value.trim().toLowerCase();
-    return (cat === "All" || g.cat === cat) && (!q || String(g.title || "").toLowerCase().indexOf(q) >= 0);
+    var q = sq.groups.trim().toLowerCase();
+    if (cat !== "All" && g.cat !== cat) return false;
+    return !q || (String(g.title || "") + "\n" + String(g.desc || "")).toLowerCase().indexOf(q) >= 0;
   }
   function render() {
     var list = $("list"); list.textContent = "";
     var f = data.featured.filter(match), a = data.groups.filter(match);
     if (f.length) { list.appendChild(el("div", "sec", "⭐ Featured")); f.forEach(function (g) { list.appendChild(card(g, true)); }); }
     if (a.length) { list.appendChild(el("div", "sec", "All groups")); a.forEach(function (g) { list.appendChild(card(g, false)); }); }
+    if (!f.length && !a.length && sq.groups.trim() && (data.featured.length || data.groups.length)) { list.appendChild(el("div", "noresults", "No results")); return; }
     if (!f.length && !a.length) {
       var e = el("div", "empty"), none = !data.featured.length && !data.groups.length;
       e.appendChild(el("b", null, none ? "No groups yet" : "No groups found"));
@@ -394,7 +398,7 @@
   }
   function clean(list) {
     return (Array.isArray(list) ? list : []).filter(function (g) { return g && safeUrl(g.url); })
-      .map(function (g) { return { title: String(g.title || "Telegram Group"), url: String(g.url), members: Number(g.members) || 0, cat: g.cat ? String(g.cat) : "" }; });
+      .map(function (g) { return { title: String(g.title || "Telegram Group"), url: String(g.url), members: Number(g.members) || 0, cat: g.cat ? String(g.cat) : "", desc: String(g.desc || g.description || "") }; });
   }
   function load() {
     api("/app/api/groups").then(function (d) {
@@ -677,11 +681,21 @@
     var ok = needChat($("msg-login"), "Log in to chat", "Log in with your Telegram account to message support and chat with everyone.", "login-msgtab");
     $("chats").classList.toggle("hide", !ok);
     $("chats-msg").classList.add("hide");
-    if (!ok) return;
+    if (!ok) { $("msg-none").classList.add("hide"); return; }
     var admin = !!getChat().isAdmin;
     $("sup-prev").textContent = admin ? "Support inbox" : "Message the Group City team";
-    muteIcons();
+    muteIcons(); filterChats();
     loadSummary(false);
+  }
+  // Messages search: filter the chat rows by name / last message (live, as you type)
+  var CHAT_ROWS = [{ row: "row-support", name: "Support", prev: "sup-prev" }, { row: "row-public", name: "Group City Chat", prev: "pub-prev" }];
+  function filterChats() {
+    var q = sq.msg.trim().toLowerCase(), shown = 0;
+    CHAT_ROWS.forEach(function (r) {
+      var hit = !q || (r.name + "\n" + $(r.prev).textContent).toLowerCase().indexOf(q) >= 0;
+      $(r.row).classList.toggle("hide", !hit); if (hit) shown++;
+    });
+    $("msg-none").classList.toggle("hide", !(q && !shown && !$("chats").classList.contains("hide")));
   }
   // ---------- mute (per chat, this device only) ----------
   function muteKey(room, uid) { return "gc_mute:" + room + (uid ? ":" + uid : ""); }
@@ -755,6 +769,7 @@
       $("sup-time").textContent = s ? listTime(s.at) : "";
       var badge = $("sup-badge"), n = Number(d.waiting) || 0;
       setCount(badge, $("sup-time"), admin ? n : 0, false, false);
+      filterChats();
       warmFromSummary(d, admin);
     }).catch(function () { if (quiet) return; var m = $("chats-msg"); m.className = "msg err"; m.textContent = "Couldn't connect. Check your connection."; });
   }
@@ -1199,16 +1214,37 @@
     current = name;
     ["groups", "msg", "profile"].forEach(function (t) { $("v-" + t).classList.toggle("hide", t !== name); });
     Array.prototype.forEach.call(document.querySelectorAll(".nav button"), function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === name); });
+    searchBar();
     if (name === "msg") renderMsgTab();
     if (name === "profile") renderProfile();
     window.scrollTo(0, 0);
   }
+  // search bar: shown on Groups + Messages (a chat / sheet opens above it), placeholder + text follow the tab
+  function searchBar() {
+    var on = current === "groups" || current === "msg", q = $("q");
+    $("tsearch").classList.toggle("hide", !on);
+    if (!on) return;
+    var ph = current === "msg" ? "Search Chats" : "Search Groups";
+    q.placeholder = ph; q.setAttribute("aria-label", ph);
+    q.value = sq[current];
+    $("q-x").classList.toggle("hide", !q.value);
+  }
+  function searchInput() {
+    if (current !== "groups" && current !== "msg") return;
+    sq[current] = $("q").value;
+    $("q-x").classList.toggle("hide", !sq[current]);
+    if (current === "msg") filterChats(); else render();
+  }
   Array.prototype.forEach.call(document.querySelectorAll(".nav button"), function (b) { b.onclick = function () { tab(b.getAttribute("data-tab")); }; });
-  $("q").addEventListener("input", render);
+  $("q").addEventListener("input", searchInput);
+  $("q").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); try { $("q").blur(); } catch (x) {} }
+    else if (e.key === "Escape" && $("q").value) { e.preventDefault(); $("q").value = ""; searchInput(); }
+  });
+  $("q-x").onclick = function () { $("q").value = ""; searchInput(); try { $("q").focus(); } catch (e) {} };
   $("promo-add").onclick = function () { promote(); };
-  // Telegram-style header + floating button (UI shortcuts to existing actions)
+  // Telegram-style header ⋮ + floating button (UI shortcuts to existing actions); search lives in the bar under the header
   $("fab-add").onclick = function () { promote(); };
-  $("hd-search").onclick = function () { if (current !== "groups" || screens.length) tab("groups"); var q = $("q"); q.focus(); try { q.select(); } catch (e) {} };
   $("hd-menu").onclick = function () { tab("profile"); };
   $("pr-close").onclick = closeSheet;
   $("v-promote").addEventListener("click", function (e) { if (e.target === $("v-promote")) closeSheet(); });
@@ -1222,7 +1258,7 @@
   $("logout").onclick = logout;
   if (!inTg) $("pr-note").textContent = "One payment lists one group. You pay with Telegram Stars in the bot.";
 
-  chips(); catPicker(); prices(); renderAccount(); netUpdate();
+  chips(); catPicker(); prices(); renderAccount(); netUpdate(); searchBar();
   var sp = (inTg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || (new URLSearchParams(location.search).get("tab") || "");
   if (sp === "promote") promote(); else if (sp === "mine" || sp === "profile" || sp === "msg") tab(sp);
   if (inTg) tgChatLogin().then(function () { renderAccount(); refreshTab(); if (current !== "msg") loadSummary(true); });

@@ -15,11 +15,13 @@
 <div class="wrap">
   <!-- App header (Telegram-style), shown on every tab -->
   <header class="apphead">
-    <span class="logo-ring"><svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="gcLogoG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#41b4f0"/><stop offset="1" stop-color="#1d8fd8"/></linearGradient></defs><circle cx="24" cy="24" r="24" fill="url(#gcLogoG)"/><path fill="#fff" d="M12 35V24h6v11zm8 0V15l4-3 4 3v20zm10 0V20h6v15z"/><path fill="#2a9fe2" d="M23 18h2v2h-2zm0 5h2v2h-2zm0 5h2v2h-2zM14 27h2v2h-2zm18-3h2v2h-2zm0 5h2v2h-2z"/><path d="M9 38.5c9-2.6 21-2.6 30 0" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".85"/></svg></span>
     <div class="appname" id="hd-title"><span class="an-name" id="hd-name">Group City</span><span class="an-stat" id="hd-stat" role="status" aria-hidden="true"><span id="hd-word">Connecting</span><span class="ndots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></span></div>
-    <button class="hbtn" id="hd-search" type="button" aria-label="Search groups"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button>
     <button class="hbtn" id="hd-menu" type="button" aria-label="Profile"><svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
   </header>
+  <!-- Telegram-style search bar (Groups + Messages tabs): filters the current list as you type -->
+  <div class="tsearch" id="tsearch">
+    <label class="tsfield"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><input id="q" type="search" placeholder="Search Groups" autocomplete="off" enterkeyhint="search" aria-label="Search Groups"><button class="tsclear hide" id="q-x" type="button" aria-label="Clear search">✕</button></label>
+  </div>
   <!-- Groups -->
   <section id="v-groups">
     <div class="top">
@@ -27,7 +29,6 @@
         <div><div class="title">Groups</div><div class="sub">Find groups to join</div></div>
         <div class="acct hide" id="acct-groups"></div>
       </div>
-      <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><input id="q" type="search" placeholder="Search groups..." autocomplete="off" enterkeyhint="search" aria-label="Search groups"></label>
     </div>
     <div class="chips hide" id="chips"></div>
     <div class="promo hide" id="promo"><div><b>⭐ Promote your group</b><span id="promo-sub">From 10 Stars</span></div><button id="promo-add" type="button">Add</button></div>
@@ -81,7 +82,6 @@
 
   <!-- Messages -->
   <section id="v-msg" class="hide">
-    <div class="top"><div class="toprow"><div><div class="title">Messages</div><div class="sub">Support and the Group City chat</div></div></div></div>
     <div id="msg-login" class="hide"></div>
     <div class="chats" id="chats">
       <button class="crow" id="row-support" type="button">
@@ -95,6 +95,7 @@
         <span class="cbot"><span class="cprev" id="pub-prev">Chat with everyone</span><span class="cbadge hide" id="pub-badge"></span></span></span>
       </button>
     </div>
+    <div class="noresults hide" id="msg-none">No results</div>
     <div class="msg hide" id="chats-msg" style="margin:12px 16px"></div>
   </section>
 
