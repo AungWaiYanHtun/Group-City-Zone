@@ -16,6 +16,10 @@
 
   var data = { featured: [], groups: [], bot: BOT, short: "", price: 10, topPrice: 50, days: 30 };
   var cat = "All", pkg = "top", busy = false, mineLoaded = false, current = "groups";
+  // Group categories: the one list is CATEGORIES in config.js (the worker keeps the same allow-list).
+  var CATS = (Array.isArray(CFG.CATEGORIES) ? CFG.CATEGORIES : []).map(function (c) { return String(c || "").trim(); })
+    .filter(function (c, i, a) { return c && c !== "All" && a.indexOf(c) === i; });
+  var prCat = "";                               // category picked in the Promote form ("" = not chosen yet)
   var SKEY = "gc_session", CKEY = "gc_chat_session";
 
   var $ = function (id) { return document.getElementById(id); };
@@ -155,13 +159,13 @@
       list.appendChild(e);
     }
   }
+  // Always "All" + every configured category, in config order (even when no group has it yet).
   function chips() {
-    var cats = [];
-    data.featured.concat(data.groups).forEach(function (g) { if (g.cat && cats.indexOf(g.cat) < 0) cats.push(g.cat); });
     var box = $("chips"); box.textContent = "";
-    if (!cats.length) { box.classList.add("hide"); return; }
+    if (!CATS.length) { box.classList.add("hide"); return; }
+    if (cat !== "All" && CATS.indexOf(cat) < 0) cat = "All";
     box.classList.remove("hide");
-    ["All"].concat(cats).forEach(function (c) {
+    ["All"].concat(CATS).forEach(function (c) {
       var b = el("button", "chip" + (c === cat ? " on" : ""), c); b.type = "button";
       b.onclick = function () { cat = c; chips(); render(); };
       box.appendChild(b);
@@ -292,6 +296,17 @@
     $("promo-sub").textContent = "From " + data.price + " Stars";
     setPkg(pkg);
   }
+  function catPicker() {
+    var box = $("pr-cats"); box.textContent = "";
+    $("pr-cats").parentNode.classList.toggle("hide", !CATS.length);
+    CATS.forEach(function (c) {
+      var b = el("button", "catb" + (c === prCat ? " on" : ""), c); b.type = "button";
+      b.setAttribute("role", "radio"); b.setAttribute("aria-checked", c === prCat ? "true" : "false");
+      b.onclick = function () { prCat = c; box.classList.remove("need"); catPicker(); if ($("pr-msg").textContent === "Choose a category") msg("", ""); };
+      box.appendChild(b);
+    });
+  }
+  function resetForm() { $("pr-url").value = ""; $("pr-title").value = ""; prCat = ""; catPicker(); }
   function msg(text, kind) { var m = $("pr-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = text; if (!text) m.classList.add("hide"); }
   function showOnly(id) { ["pr-form", "pr-terms", "pr-pay"].forEach(function (x) { $(x).classList.toggle("hide", x !== id); }); $("sheet").scrollTop = 0; }
   function openSheet() { $("v-promote").classList.remove("hide"); document.body.classList.add("lock"); showPromote(); }
@@ -303,9 +318,11 @@
   }
   function buy(agree) {
     if (busy) return;
+    if (CATS.length && CATS.indexOf(prCat) < 0) { showOnly("pr-form"); $("pr-cats").classList.add("need"); msg("Choose a category", "err"); return; }
     var url = $("pr-url").value.trim();
     if (!/^(https?:\/\/)?(t\.me|telegram\.me)\/\S+$/i.test(url) && !/^@[A-Za-z0-9_]{4,}$/.test(url)) { msg("Enter your Telegram group link, like https://t.me/yourgroup", "err"); $("pr-url").focus(); return; }
     var body = { title: $("pr-title").value.trim(), url: url, pkg: pkg, agree: agree === true };
+    if (prCat) body.cat = prCat;
     var req;
     if (inTg) { body.initData = tg.initData; req = api("/app/api/invoice", { body: body }); }
     else if (getSession()) req = api("/web/api/promote", { body: body, auth: true });
@@ -327,7 +344,7 @@
     var done = function (status) {
       if (status === "paid") {
         msg("✅ Paid! Your group is listed" + (pkg === "top" ? " in ⭐ Featured." : " in All Groups.") + " It can take a few seconds to appear.", "okm");
-        $("pr-url").value = ""; $("pr-title").value = ""; mineLoaded = false;
+        resetForm(); mineLoaded = false;
         setTimeout(load, 1500); setTimeout(load, 5000);
       } else if (status === "cancelled") msg("Payment cancelled.", "");
       else if (status === "failed") msg("Payment failed. Please try again.", "err");
@@ -340,7 +357,7 @@
     var top = d.pkg === "top";
     $("pay-title").textContent = body.title || body.url.replace(/^https?:\/\//i, "");
     $("pay-url").textContent = body.url;
-    $("pay-pkg").textContent = (top ? "⭐ TOP — shown at the top" : "👥 Normal — listed in All Groups") + " · " + (Number(d.price) || "") + " ⭐ · " + (Number(d.days) || data.days) + " days";
+    $("pay-pkg").textContent = (body.cat ? body.cat + " · " : "") + (top ? "⭐ TOP — shown at the top" : "👥 Normal — listed in All Groups") + " · " + (Number(d.price) || "") + " ⭐ · " + (Number(d.days) || data.days) + " days";
     $("pay-link").setAttribute("href", d.pay);
     $("pay-bot").textContent = botName();
     msg("", ""); showOnly("pr-pay");
@@ -723,12 +740,12 @@
   $("pr-buy").onclick = function () { buy(false); };
   $("pr-terms-ok").onclick = function () { buy(true); };
   $("pr-terms-no").onclick = function () { showOnly("pr-form"); msg("You need to agree to the terms before paying.", ""); };
-  $("pay-done").onclick = function () { mineLoaded = false; $("pr-url").value = ""; $("pr-title").value = ""; showOnly("pr-form"); tab("profile"); };
-  $("pay-new").onclick = function () { $("pr-url").value = ""; $("pr-title").value = ""; showOnly("pr-form"); };
+  $("pay-done").onclick = function () { mineLoaded = false; resetForm(); showOnly("pr-form"); tab("profile"); };
+  $("pay-new").onclick = function () { resetForm(); showOnly("pr-form"); };
   $("logout").onclick = logout;
   if (!inTg) $("pr-note").textContent = "One payment lists one group. You pay with Telegram Stars in the bot.";
 
-  prices(); renderAccount();
+  chips(); catPicker(); prices(); renderAccount();
   var sp = (inTg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || (new URLSearchParams(location.search).get("tab") || "");
   if (sp === "promote") promote(); else if (sp === "mine" || sp === "profile" || sp === "msg") tab(sp);
   if (inTg) tgChatLogin().then(function () { renderAccount(); refreshTab(); });
