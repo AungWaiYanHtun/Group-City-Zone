@@ -53,13 +53,27 @@
       if (raw[0] !== "h" && raw[0] !== "@" && raw[0] !== "t") { pre = raw[0]; raw = raw.slice(1); }
       var start = mt.index + pre.length, shown = raw.replace(/[.,!?:;)\]}'"]+$/, ""), end = start + shown.length;
       var url = shown[0] === "@" ? "https://t.me/" + shown.slice(1) : (/^https?:\/\//i.test(shown) ? shown.replace(/^http:\/\//i, "https://") : "https://" + shown);
-      if (start > last) box.appendChild(document.createTextNode(text.slice(last, start)));
-      var a = el("a", "mlink", shown); a.href = url; a.target = "_blank"; a.rel = "noopener";
+      if (start > last) hlAppend(box, text.slice(last, start));
+      var a = el("a", "mlink"); hlAppend(a, shown); a.href = url; a.target = "_blank"; a.rel = "noopener";
       (function (u) { a.onclick = function (e) { e.preventDefault(); e.stopPropagation(); open(u); }; })(url);
       box.appendChild(a); last = end; re.lastIndex = Math.max(re.lastIndex, end);
     }
-    if (last < text.length) box.appendChild(document.createTextNode(text.slice(last)));
+    if (last < text.length) hlAppend(box, text.slice(last));
     return box;
+  }
+  // In-chat search state. While a search is on, hlAppend wraps every match in <mark class="hl"> (text only, no HTML).
+  var srch = { on: false, q: "", re: null, marks: [], cur: -1, curKey: "", mid: 0, occ: 0 };
+  function hlAppend(parent, s) {
+    if (!s) return;
+    if (!srch.on || !srch.re) { parent.appendChild(document.createTextNode(s)); return; }
+    var re = srch.re, last = 0, mt; re.lastIndex = 0;
+    while ((mt = re.exec(s))) {
+      if (!mt[0].length) { re.lastIndex++; continue; }
+      if (mt.index > last) parent.appendChild(document.createTextNode(s.slice(last, mt.index)));
+      var mk = el("mark", "hl", mt[0]); mk.gcKey = srch.mid + ":" + (srch.occ++);
+      srch.marks.push(mk); parent.appendChild(mk); last = mt.index + mt[0].length;
+    }
+    if (last < s.length) parent.appendChild(document.createTextNode(s.slice(last)));
   }
   function botName() { return data.bot || BOT; }
   function botLink(start) { var b = botName(); return b ? "https://t.me/" + encodeURIComponent(b) + (start ? "?start=" + encodeURIComponent(start) : "") : ""; }
@@ -483,10 +497,65 @@
     if (!ok) return;
     var admin = !!getChat().isAdmin;
     $("sup-prev").textContent = admin ? "Support inbox" : "Message the Group City team";
+    muteIcons();
+    loadSummary(false);
+  }
+  // ---------- mute (per chat, this device only) ----------
+  function muteKey(room, uid) { return "gc_mute:" + room + (uid ? ":" + uid : ""); }
+  function isMuted(room, uid) { try { return localStorage.getItem(muteKey(room, uid)) === "1"; } catch (e) { return false; } }
+  function setMuted(room, uid, on) { try { if (on) localStorage.setItem(muteKey(room, uid), "1"); else localStorage.removeItem(muteKey(room, uid)); } catch (e) {} }
+  function muteIcons() {
+    var admin = !!(getChat() && getChat().isAdmin);
+    $("pub-muted").classList.toggle("hide", !isMuted("public"));
+    $("sup-muted").classList.toggle("hide", admin || !isMuted("support"));
+  }
+  // light new-message signal (unmuted chats only): Telegram haptic inside Telegram, a short vibration elsewhere
+  function haptic() {
+    try { if (inTg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred) { tg.HapticFeedback.notificationOccurred("success"); return; } } catch (e) {}
+    try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
+  }
+  // unread count for the public chat: last public message id seen on this device; counted with the normal ?after= read
+  var SEENKEY = "gc_seen_public", lastSum = null, unread = { at: "", n: 0 };
+  function getSeen() { try { return Number(localStorage.getItem(SEENKEY)) || 0; } catch (e) { return 0; } }
+  function setSeen(id) { id = Number(id) || 0; if (id > getSeen()) { try { localStorage.setItem(SEENKEY, String(id)); } catch (e) {} } }
+  function showUnread(n) {
+    n = isMuted("public") ? 0 : n;
+    var t = n > 99 ? "99+" : String(n);
+    var b = $("pub-badge"); b.className = "cbadge" + (n ? "" : " hide"); b.textContent = n ? t : "";
+    var nb = $("nav-msg-badge"); nb.classList.toggle("hide", !n); nb.textContent = n ? t : "";
+  }
+  function countUnread(p) {
+    if (!p || !p.id) { showUnread(0); return; }
+    var seen = getSeen();
+    if (!seen) { setSeen(p.id); showUnread(0); return; }          // first run on this device: history counts as read
+    var ukey = p.id + ":" + seen;
+    if (p.id <= seen || isMuted("public")) { unread = { at: ukey, n: 0 }; showUnread(0); return; }
+    if (unread.at === ukey) { showUnread(unread.n); return; }
+    chatApi("/api/chat?room=public&after=" + encodeURIComponent(seen)).then(function (d) {
+      if (!d || !d.ok) return;
+      var ms = Array.isArray(d.messages) ? d.messages : [];
+      var n = ms.filter(function (m) { return m && !m.mine && m.id > getSeen(); }).length;
+      if (ms.length >= 100 && n) n = 100;
+      unread = { at: ukey, n: n };
+      if (screens[screens.length - 1] === "v-chat" && ch && ch.room === "public") n = 0;
+      showUnread(n);
+    }).catch(function () {});
+  }
+  function loadSummary(quiet) {
+    if (!chatReady()) return;
+    var admin = !!getChat().isAdmin;
     chatApi("/api/chat?view=summary").then(function (d) {
-      if (d._status === 401) { chatExpired(); return; }
-      if (!d.ok) { var m = $("chats-msg"); m.className = "msg err"; m.textContent = d.message || "Couldn't load messages."; return; }
+      if (d._status === 401) { if (!quiet) chatExpired(); return; }
+      if (!d.ok) { if (quiet) return; var m = $("chats-msg"); m.className = "msg err"; m.textContent = d.message || "Couldn't load messages."; return; }
       if (getChat() && getChat().isAdmin !== !!d.isAdmin) { var c = getChat(); c.isAdmin = !!d.isAdmin; setChat(c); admin = !!d.isAdmin; }
+      var onList = current === "msg" && !screens.length;
+      if (lastSum && onList) {
+        var np = d.public && !d.public.mine && d.public.id > lastSum.pub && !isMuted("public");
+        var ns = !admin && d.support && !d.support.mine && d.support.id > lastSum.sup && !isMuted("support");
+        if (np || ns) haptic();
+      }
+      lastSum = { pub: d.public ? Number(d.public.id) || 0 : 0, sup: d.support ? Number(d.support.id) || 0 : 0 };
+      countUnread(d.public); muteIcons();
       var p = d.public, s = d.support;
       $("pub-prev").textContent = p ? preview(p, p.name) : "Chat with everyone";
       $("pub-time").textContent = p ? listTime(p.at) : "";
@@ -495,8 +564,10 @@
       var badge = $("sup-badge"), n = Number(d.waiting) || 0;
       badge.classList.toggle("hide", !(admin && n));
       badge.className = "cbadge" + (admin && n ? "" : " hide"); badge.textContent = n ? String(n) : "";
-    }).catch(function () { var m = $("chats-msg"); m.className = "msg err"; m.textContent = "Couldn't connect. Check your connection."; });
+    }).catch(function () { if (quiet) return; var m = $("chats-msg"); m.className = "msg err"; m.textContent = "Couldn't connect. Check your connection."; });
   }
+  // keeps the Messages list and the unread badge fresh (not while a chat is open: the chat polls itself)
+  setInterval(function () { if (!document.hidden && chatReady() && screens[screens.length - 1] !== "v-chat") loadSummary(true); }, 20000);
 
   // ---------- screens (support inbox, chat) ----------
   var screens = [];   // open screen ids, top last
@@ -508,12 +579,14 @@
   function openScreen(id) { $(id).classList.remove("hide"); if (screens.indexOf(id) < 0) screens.push(id); syncBack(); }
   function closeScreen(id) {
     $(id).classList.add("hide"); screens = screens.filter(function (x) { return x !== id; });
-    if (id === "v-chat") stopPoll();
+    if (id === "v-chat") { stopPoll(); closePop(); closeSearch(true); }
     if (id === "v-threads") stopThreadPoll();
     syncBack();
   }
   function goBack() {
     var top = screens[screens.length - 1]; if (!top) return;
+    if (top === "v-chat" && popOpen()) { closePop(); return; }
+    if (top === "v-chat" && srch.on) { closeSearch(); return; }
     closeScreen(top);
     if (top === "v-chat" && screens.indexOf("v-threads") >= 0) { loadThreads(); startThreadPoll(); }
     if (!screens.length && current === "msg") renderMsgTab();
@@ -542,7 +615,9 @@
         row.appendChild(avatar(t.photo, t.name, t.u, "av cav"));
         var info = el("span", "cinfo"), top = el("span", "ctop"), bot = el("span", "cbot");
         var nm = el("span", "cname", t.name + (t.username ? "  @" + t.username : ""));
-        top.appendChild(nm); top.appendChild(el("span", "ctime", t.last ? listTime(t.last.at) : ""));
+        var nmw = el("span", "cnm"); nmw.appendChild(nm);
+        if (isMuted("support", String(t.uid))) { var mi = el("span", "mutei"); mi.setAttribute("aria-label", "Muted"); nmw.appendChild(mi); }
+        top.appendChild(nmw); top.appendChild(el("span", "ctime", t.last ? listTime(t.last.at) : ""));
         bot.appendChild(el("span", "cprev", t.last ? preview(t.last, t.last.admin ? "Support" : "") : ""));
         if (t.waiting) bot.appendChild(el("span", "cbadge dot"));
         info.appendChild(top); info.appendChild(bot); row.appendChild(info);
@@ -564,13 +639,14 @@
   }
   function openChat(o) {
     if (!chatReady()) { tab("msg"); return; }
-    stopPoll();
+    stopPoll(); closePop(); closeSearch(true);
     ch = { room: o.room, uid: o.uid || "", msgs: [], admin: !!getChat().isAdmin, loaded: false };
     var hav = $("ch-av"), nav;
     if (o.room === "public") { nav = el("span", "av cav", "💬"); nav.style.background = "#3d8bd9"; $("ch-title").textContent = "Group City Chat"; $("ch-sub").textContent = "Everyone on Group City"; }
     else if (o.uid) { nav = avatar(o.photo, o.title, o.seed, "av cav"); $("ch-title").textContent = o.title || "User"; $("ch-sub").textContent = o.sub || "Support thread"; }
     else { nav = el("span", "av cav", "🆘"); nav.style.background = "#e5534b"; $("ch-title").textContent = "Support"; $("ch-sub").textContent = "Ask the Group City team anything"; }
     nav.id = "ch-av"; hav.parentNode.replaceChild(nav, hav);
+    muteUi();
     $("ch-text").value = ""; autoGrow(); chatErr(""); if ($("ch-emop")) { $("ch-emop").classList.add("hide"); $("ch-emo").classList.remove("on"); }
     $("ch-text").placeholder = o.room === "support" && o.uid ? "Reply as Support" : "Message";
     var list = $("ch-list"); list.textContent = ""; list.appendChild(el("div", "cempty", "Loading…"));
@@ -590,9 +666,10 @@
       if (ch !== my) return;
       if (d._status === 401) { closeAllScreens(); chatExpired(); return; }
       if (!d.ok) { if (first) { var l = $("ch-list"); l.textContent = ""; l.appendChild(el("div", "cempty", d.message || "Couldn't load messages.")); } return; }
-      var changed = false, ids = {};
+      var changed = false, ids = {}, incoming = 0;
       ch.msgs.forEach(function (m) { ids[m.id] = true; });
-      (Array.isArray(d.messages) ? d.messages : []).forEach(function (m) { if (m && m.id && !ids[m.id]) { ch.msgs.push(m); ids[m.id] = true; changed = true; } });
+      (Array.isArray(d.messages) ? d.messages : []).forEach(function (m) { if (m && m.id && !ids[m.id]) { ch.msgs.push(m); ids[m.id] = true; changed = true; if (!m.mine) incoming++; } });
+      if (!first && ch.loaded && incoming && !isMuted(ch.room, ch.uid)) haptic();
       if (Array.isArray(d.live)) {
         var live = {}, min = Infinity, max = 0;
         d.live.forEach(function (x) { live[x] = true; if (x < min) min = x; if (x > max) max = x; });
@@ -603,7 +680,13 @@
       }
       ch.msgs.sort(function (a, b) { return a.id - b.id; });
       if (ch.msgs.length > MAX_SHOWN) ch.msgs = ch.msgs.slice(-MAX_SHOWN);
-      if (first || changed || !ch.loaded) { var stick = first || nearBottom(); ch.loaded = true; renderMsgs(); if (stick) toBottom(); }
+      if (ch.room === "public") { setSeen(lastId()); showUnread(0); }
+      if (first || changed || !ch.loaded) {
+        var stick = (first || nearBottom()) && !srch.on, l = $("ch-list"), st = l.scrollTop;
+        ch.loaded = true; renderMsgs();
+        if (srch.on) l.scrollTop = st;      // a poll while searching keeps the place and the current match
+        if (stick) toBottom();
+      }
     }).catch(function () { pollBusy = false; if (first && ch === my) { var l = $("ch-list"); l.textContent = ""; l.appendChild(el("div", "cempty", "Couldn't connect. Check your connection.")); } });
   }
   function startPoll() { stopPoll(); pollTimer = setInterval(function () { if (!document.hidden && screens[screens.length - 1] === "v-chat") fetchMsgs(false); }, 5000); }
@@ -617,6 +700,10 @@
   function renderMsgs() {
     var list = $("ch-list"); list.textContent = "";
     var ms = ch.msgs;
+    srch.marks = [];
+    try { renderList(list, ms); } finally { searchSync(false); }
+  }
+  function renderList(list, ms) {
     if (!ms.length) {
       var e = el("div", "cempty");
       if (ch.room === "public") { e.appendChild(el("b", null, "No messages yet")); e.appendChild(document.createTextNode("Say hello to everyone on Group City. Be kind, no spam.")); }
@@ -648,6 +735,7 @@
       }
       var t = el("div", "btext");
       t.appendChild(el("span", "btime", isNaN(d) ? "" : hhmm(d)));
+      srch.mid = m.id; srch.occ = 0;
       t.appendChild(linkify(String(m.text || "")));
       b.appendChild(t);
       b.onclick = function () { msgMenu(m); };
@@ -709,6 +797,101 @@
   };
   $("ch-back").onclick = goBack;
   $("th-back").onclick = goBack;
+
+  // ---------- chat ⋮ menu: Mute / Search (Telegram-style popup) ----------
+  function popOpen() { return !$("ch-pop").classList.contains("hide"); }
+  function openPop() {
+    if (!ch) return;
+    muteUi();
+    $("ch-pop").classList.remove("hide"); $("ch-popbg").classList.remove("hide");
+    $("ch-more").classList.add("on"); $("ch-more").setAttribute("aria-expanded", "true");
+  }
+  function closePop() {
+    $("ch-pop").classList.add("hide"); $("ch-popbg").classList.add("hide");
+    $("ch-more").classList.remove("on"); $("ch-more").setAttribute("aria-expanded", "false");
+  }
+  function muteUi() {
+    var m = !!ch && isMuted(ch.room, ch.uid);
+    $("ch-muted").classList.toggle("hide", !m);
+    $("ch-mute").classList.toggle("muted", m);
+    $("ch-mute-l").textContent = m ? "Unmute" : "Mute";
+  }
+  $("ch-more").onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); if (popOpen()) closePop(); else openPop(); };
+  $("ch-popbg").onclick = closePop;
+  $("ch-popbg").addEventListener("touchmove", function (e) { closePop(); if (e && e.preventDefault) e.preventDefault(); });
+  $("ch-mute").onclick = function () {
+    if (!ch) { closePop(); return; }
+    setMuted(ch.room, ch.uid, !isMuted(ch.room, ch.uid));
+    muteUi(); closePop();
+    if (ch.room === "public") showUnread(0);
+  };
+  $("ch-find").onclick = function () { closePop(); openSearch(); };
+
+  // ---------- in-chat search: highlights matches in the loaded messages, ▲/▼ walk them (newest first) ----------
+  function escRe(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function openSearch() {
+    if (!ch) return;
+    srch.on = true; srch.q = ""; srch.re = null; srch.cur = -1; srch.curKey = "";
+    emoShow(false);
+    var head = $("ch-sfield").parentNode; head.classList.add("searching");
+    $("ch-sback").classList.remove("hide"); $("ch-sfield").classList.remove("hide");
+    $("ch-form").classList.add("hide"); $("ch-sbar").classList.remove("hide");
+    $("ch-q").value = ""; $("ch-qx").classList.add("hide");
+    searchSync(false);
+    try { $("ch-q").focus(); } catch (e) {}
+  }
+  // quiet = closing because the chat closes/changes (no re-render needed)
+  function closeSearch(quiet) {
+    if (!srch.on) return;
+    srch.on = false; srch.q = ""; srch.re = null; srch.cur = -1; srch.curKey = ""; srch.marks = [];
+    $("ch-sfield").parentNode.classList.remove("searching");
+    $("ch-sback").classList.add("hide"); $("ch-sfield").classList.add("hide");
+    $("ch-form").classList.remove("hide"); $("ch-sbar").classList.add("hide");
+    $("ch-q").value = "";
+    try { $("ch-q").blur(); } catch (e) {}
+    if (!quiet && ch && ch.loaded) { var l = $("ch-list"), st = l.scrollTop; renderMsgs(); l.scrollTop = st; }
+  }
+  function searchQuery(v) {
+    v = String(v || "").replace(/\s+/g, " ").trim();
+    $("ch-qx").classList.toggle("hide", !$("ch-q").value);
+    if (v === srch.q) return;
+    srch.q = v; srch.re = v ? new RegExp(escRe(v), "gi") : null; srch.curKey = ""; srch.cur = -1;
+    if (!ch || !ch.loaded) { searchSync(false); return; }
+    var l = $("ch-list"), st = l.scrollTop;
+    renderMsgs(); l.scrollTop = st;
+    if (srch.marks.length) searchGo(srch.marks.length - 1);   // newest match first, like Telegram
+  }
+  // after every render: keep the current match (by message id + position), update "N of M" and the arrows
+  function searchSync(scroll) {
+    if (!srch.on) return;
+    var mk = srch.marks, M = mk.length, i = -1;
+    if (srch.curKey) for (var k = 0; k < M; k++) if (mk[k].gcKey === srch.curKey) { i = k; break; }
+    if (i < 0 && M) i = srch.cur >= 0 ? Math.min(srch.cur, M - 1) : M - 1;
+    srch.cur = M ? i : -1; srch.curKey = M ? mk[i].gcKey : "";
+    for (var j = 0; j < M; j++) mk[j].classList.toggle("cur", j === srch.cur);
+    $("ch-scount").textContent = !srch.q ? "" : (M ? (M - srch.cur) + " of " + M : "No results");
+    $("ch-sup").disabled = !M || srch.cur <= 0;
+    $("ch-sdown").disabled = !M || srch.cur >= M - 1;
+    if (scroll && M) { var t = mk[srch.cur]; try { if (t.scrollIntoView) t.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { try { t.scrollIntoView(); } catch (e2) {} } }
+  }
+  function searchGo(i) {
+    var M = srch.marks.length; if (!M) return;
+    i = Math.max(0, Math.min(M - 1, i));
+    srch.cur = i; srch.curKey = srch.marks[i].gcKey; searchSync(true);
+  }
+  $("ch-sback").onclick = function () { closeSearch(); };
+  $("ch-q").addEventListener("input", function () { searchQuery($("ch-q").value); });
+  $("ch-q").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); try { $("ch-q").blur(); } catch (x) {} if (srch.marks.length) searchGo(srch.cur > 0 ? srch.cur - 1 : srch.cur); }
+    else if (e.key === "Escape") { e.preventDefault(); closeSearch(); }
+  });
+  $("ch-qx").onclick = function () { $("ch-q").value = ""; searchQuery(""); try { $("ch-q").focus(); } catch (e) {} };
+  $("ch-sup").onclick = function () { searchGo(srch.cur - 1); };      // older
+  $("ch-sdown").onclick = function () { searchGo(srch.cur + 1); };    // newer
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape" || screens[screens.length - 1] !== "v-chat") return;
+    if (popOpen()) closePop(); else if (srch.on && document.activeElement !== $("ch-q")) closeSearch();
+  });
   // Emoji panel (Telegram-style): tap the smiley to open, tap an emoji to insert it at the cursor.
   var EMOJI = [
     ["😀", "😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🤭 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕 🤑 🤠 😈 👿 👻 💀 👽 🤖 💩 😺 😸 😹 😻 😼 😽 🙀 😿 😾"],
@@ -809,6 +992,7 @@
   chips(); catPicker(); prices(); renderAccount();
   var sp = (inTg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || (new URLSearchParams(location.search).get("tab") || "");
   if (sp === "promote") promote(); else if (sp === "mine" || sp === "profile" || sp === "msg") tab(sp);
-  if (inTg) tgChatLogin().then(function () { renderAccount(); refreshTab(); });
+  if (inTg) tgChatLogin().then(function () { renderAccount(); refreshTab(); if (current !== "msg") loadSummary(true); });
+  else if (chatReady() && current !== "msg") loadSummary(true);   // unread badge on the bottom-nav Messages
   load();
 })();

@@ -265,3 +265,52 @@ html.dark .emopanel{border-top-color:rgba(255,255,255,.08)}
 .emogrid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));padding:2px 6px 8px;align-content:start;-webkit-overflow-scrolling:touch}
 .emogrid button{height:44px;border:0;background:none;font-size:28px;line-height:1;cursor:pointer;border-radius:10px;padding:0}
 .emogrid button:active{background:rgba(0,0,0,.08)}
+
+/* ---------- Chat ⋮ menu, mute, in-chat search ---------- */
+.cpill{padding-right:4px}
+.ctrow{display:flex;align-items:center;gap:5px;min-width:0}
+.ctrow .ctitle{min-width:0}
+.cnm{display:flex;align-items:center;gap:5px;min-width:0}
+.mutei{flex:none;display:inline-block;width:16px;height:16px;background:var(--hint);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9.5h3.2L12 5.5v13l-4.8-4H4z' fill='%23000'/%3E%3Cpath d='M16 9.5l5 5M21 9.5l-5 5'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9.5h3.2L12 5.5v13l-4.8-4H4z' fill='%23000'/%3E%3Cpath d='M16 9.5l5 5M21 9.5l-5 5'/%3E%3C/svg%3E") center/contain no-repeat}
+.cbadge.muted{background:var(--hint)}
+.cmore{flex:none;width:40px;height:40px;border-radius:50%;border:0;background:none;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.cmore:active,.cmore.on{background:var(--soft)}
+.cmore svg{width:22px;height:22px;fill:currentColor}
+.cpopbg{position:absolute;inset:0;z-index:30;background:transparent}
+.cpop{position:absolute;z-index:31;top:calc(8px + env(safe-area-inset-top));right:10px;min-width:210px;background:var(--floatbg);color:var(--text);border-radius:16px;padding:6px 0;
+  box-shadow:0 6px 24px rgba(0,0,0,.2),0 1px 4px rgba(0,0,0,.12);transform-origin:top right;animation:popin .16s ease-out}
+html.dark .cpop{background:#212d3b;box-shadow:0 6px 24px rgba(0,0,0,.55)}
+@keyframes popin{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+.cpop-b{display:flex;align-items:center;gap:22px;width:100%;background:none;border:0;color:inherit;font:inherit;font-size:16px;text-align:left;padding:12px 20px;cursor:pointer}
+.cpop-b:active{background:var(--soft)}
+@media (hover:hover){.cpop-b:hover{background:var(--soft)}}
+.cpop-b svg{width:24px;height:24px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+/* like Telegram: "Mute" shows a speaker, "Unmute" the crossed-out speaker */
+#ch-mute .ic-off{display:none}
+#ch-mute.muted .ic-off{display:block}
+#ch-mute.muted .ic-on{display:none}
+.cpop-sep{height:8px;background:var(--sec);margin:4px 0;border-top:1px solid var(--sep);border-bottom:1px solid var(--sep)}
+html.dark .cpop-sep{background:rgba(0,0,0,.22)}
+/* search mode: the header pill turns into a rounded search field */
+.chead.searching #ch-back,.chead.searching .cpill{display:none}
+.csfield{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:var(--floatbg);border-radius:26px;padding:0 6px 0 14px;box-shadow:0 1px 4px rgba(0,0,0,.14);min-height:46px;color:var(--hint)}
+.csfield>svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.csfield input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-size:16px;padding:10px 0;-webkit-appearance:none;appearance:none}
+.csfield input::-webkit-search-cancel-button{display:none}
+.csfield input::placeholder{color:var(--hint)}
+.csclear{flex:none;width:34px;height:34px;border:0;border-radius:50%;background:none;color:var(--hint);font-size:15px;cursor:pointer}
+.csbar{flex:none;display:flex;align-items:center;gap:6px;margin:6px 8px calc(8px + env(safe-area-inset-bottom));padding:4px 6px 4px 18px;min-height:50px;background:var(--floatbg);border-radius:26px;box-shadow:0 1px 4px rgba(0,0,0,.14)}
+.cscount{flex:1;font-size:15px;color:var(--text);font-weight:500}
+.csnav{width:42px;height:42px;border:0;border-radius:50%;background:none;color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.csnav svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.csnav:disabled{color:var(--hint);opacity:.5;cursor:default}
+mark.hl{background:#fff09a;color:#000;border-radius:3px;padding:0 1px}
+mark.hl.cur{background:#ff9f1a;color:#000;box-shadow:0 0 0 2px #ff9f1a}
+html.dark mark.hl{background:#8a7420;color:#fff}
+html.dark mark.hl.cur{background:#ffb627;color:#000;box-shadow:0 0 0 2px #ffb627}
+.mlink mark.hl{color:#0b5f91}
+/* unread badge on the bottom-nav Messages icon */
+.nav i{position:relative}
+.nbadge{position:absolute;top:-4px;left:16px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--btn);color:var(--btnt);font-size:11px;font-weight:700;font-style:normal;line-height:18px;text-align:center;box-shadow:0 0 0 2px var(--navbg)}
