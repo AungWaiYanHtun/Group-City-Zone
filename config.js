@@ -6,7 +6,9 @@ window.GC_CONFIG = {
   // Group categories (chips on the Groups page + the picker in Promote). To add one, add it here AND to the
   // worker (CATEGORIES in server.ts, or the Cloudflare variable CATEGORIES = comma list). Names must match exactly.
   CATEGORIES: ["Chatting Group", "Dating Group", "Videos Group"],
-  // Airdrop (Adsgram Reward ads). Paste the Reward blockId (digits) from partner.adsgram.ai for THIS Mini App's
-  // platform (Web app url = this site). Empty = Airdrop shows "coming soon".
-  ADSGRAM_BLOCK_ID: "62186"
+  // Reward ads (CleanAds, cleanads.ai). Paste the Rewarded placement id ("pl_...") from your CleanAds app page.
+  // Empty = the Reward screen shows "coming soon".
+  CLEANADS_PLACEMENT_ID: "pl_Q1kvznHjPi47",
+  // true = CleanAds free sample ads (for testing, never paid). Set to false after CleanAds approves the app.
+  CLEANADS_TEST: true
 };

@@ -742,16 +742,17 @@
     return true;
   }
 
-  // ---------- wallet: Reward (Adsgram Reward ads → City Coins; the worker counts and limits) ----------
-  var AD_BLOCK = String((window.GC_CONFIG && GC_CONFIG.ADSGRAM_BLOCK_ID) || "").trim();
+  // ---------- wallet: Reward (CleanAds rewarded ads → City Coins; the worker counts and limits) ----------
+  var AD_BLOCK = String((window.GC_CONFIG && GC_CONFIG.CLEANADS_PLACEMENT_ID) || "").trim();
+  var AD_TEST = !!(window.GC_CONFIG && GC_CONFIG.CLEANADS_TEST);
   var drop = { st: null, busy: false, timer: 0, ctl: null, sdk: null };
   function drMsg(t, kind) { var m = $("dr-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = t || ""; if (!t) m.classList.add("hide"); }
   function loadAdSdk() {
-    if (window.Adsgram) return Promise.resolve(window.Adsgram);
+    if (window.CleanAds) return Promise.resolve(window.CleanAds);
     if (drop.sdk) return drop.sdk;
     drop.sdk = new Promise(function (ok, no) {
-      var sc = document.createElement("script"); sc.src = "https://sad.adsgram.ai/js/sad.min.js"; sc.async = true;
-      sc.onload = function () { window.Adsgram ? ok(window.Adsgram) : no(new Error("sdk")); };
+      var sc = document.createElement("script"); sc.src = "https://api.cleanads.ai/sdk/v1.js"; sc.async = true;
+      sc.onload = function () { window.CleanAds ? ok(window.CleanAds) : no(new Error("sdk")); };
       sc.onerror = function () { drop.sdk = null; no(new Error("sdk")); };
       document.head.appendChild(sc);
     });
@@ -793,10 +794,12 @@
     if (!st || drop.busy || !AD_BLOCK || !inTg || st.done >= st.limit) return;
     drop.busy = true; drMsg(""); drRender();
     loadAdSdk().then(function (A) {
-      if (!drop.ctl) drop.ctl = A.init({ blockId: AD_BLOCK });
-      return drop.ctl.show();
-    }).then(function (r) {
-      if (!r || !r.done) throw r || {};
+      if (!drop.ctl) {
+        var uid = ""; try { uid = String((tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) || ""); } catch (e) {}
+        drop.ctl = A.init({ placementId: AD_BLOCK, userId: uid, test: AD_TEST });
+      }
+      return drop.ctl.show();   // CleanAds: resolves when the rewarded ad finished
+    }).then(function () {
       var req = starsReq("adreward");
       if (!req) throw { description: "login" };
       return req.then(function (d) {
@@ -810,8 +813,8 @@
       });
     }).catch(function (r) {
       drop.busy = false;
-      var why = r && r.description ? String(r.description) : "";
-      drMsg(/skip|close/i.test(why) ? "Watch the ad till the end to get City Coins." : (why === "login" ? "Please log in again." : "No ad available right now. Try again later."), "err");
+      var why = r ? String(r.reason || r.description || "") : "";   // CleanAds reasons: no_fill, closed_early, already_showing, network_error, error
+      drMsg(/closed_early|skip|close/i.test(why) ? "Watch the ad till the end to get City Coins." : (why === "login" ? "Please log in again." : "No ad available right now. Try again later."), "err");
       drRender();
     });
   }
