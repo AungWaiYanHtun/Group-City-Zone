@@ -28,6 +28,8 @@
     <!-- browser only: Log in / your account (hidden inside Telegram) -->
     <div class="acctrow hide" id="acct-row"><div class="acct hide" id="acct-groups"></div></div>
     <div class="chips hide" id="chips"></div>
+    <!-- Reward ad entry: visible on the Groups tab, 1 tap opens the Reward screen (Adsgram rewarded ad) -->
+    <div class="promo rwd" id="rwd-card"><div><b>🎁 Watch an ad, get Stars</b><span>Optional bonus · free Stars every day</span></div><button id="rwd-go" type="button">Watch ad</button></div>
     <div class="promo hide" id="promo"><div><b>⭐ Promote your group</b><span id="promo-sub">From 10 Stars</span></div><button id="promo-add" type="button">Add</button></div>
     <div id="list"><div class="empty">Loading groups…</div></div>
     <button class="fab" id="fab-add" type="button" aria-label="Promote your group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5c-4.97 0-9 3.58-9 8 0 2.1.91 4 2.4 5.43L4.5 20.5l4.1-1.5c1.04.33 2.18.5 3.4.5 4.97 0 9-3.58 9-8s-4.03-8-9-8z"/><path d="M12 8v7M8.5 11.5h7"/></svg></button>
@@ -99,20 +101,20 @@
         <button class="stact" id="st-a-send" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></span><span class="stlab">Send</span></button>
         <button class="stact" id="st-a-recv" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5.5 12.5 12 19l6.5-6.5"/></svg></span><span class="stlab">Receive</span></button>
         <button class="stact" id="st-a-buy" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span class="stlab">Buy</span></button>
-        <button class="stact" id="st-a-drop" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.5a8.5 7 0 0 1 17 0"/><path d="M3.5 10.5c1.4-1.2 2.9-1.2 4.3 0 1.4-1.2 2.8-1.2 4.2 0 1.4-1.2 2.8-1.2 4.2 0 1.4-1.2 2.9-1.2 4.3 0"/><path d="M3.5 10.5 10 17M20.5 10.5 14 17M12 10.5V17"/><rect x="9.5" y="17" width="5" height="4" rx="1"/></svg></span><span class="stlab">Airdrop</span></button>
+        <button class="stact" id="st-a-drop" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.5a8.5 7 0 0 1 17 0"/><path d="M3.5 10.5c1.4-1.2 2.9-1.2 4.3 0 1.4-1.2 2.8-1.2 4.2 0 1.4-1.2 2.8-1.2 4.2 0 1.4-1.2 2.9-1.2 4.3 0"/><path d="M3.5 10.5 10 17M20.5 10.5 14 17M12 10.5V17"/><rect x="9.5" y="17" width="5" height="4" rx="1"/></svg></span><span class="stlab">Reward</span></button>
       </div>
       <div class="sthead">History</div>
       <div class="sthist" id="st-hist" role="list" aria-label="Stars history"></div>
       <div class="stlinks"><button class="link inline" id="st-help" type="button">Payment help</button><span aria-hidden="true">·</span><button class="link inline" id="st-terms-l" type="button">Terms</button></div>
     </div>
-    <!-- Airdrop: watch Adsgram rewarded ads for Stars (daily limit, checked by the worker) -->
+    <!-- Reward: watch Adsgram rewarded ads for Stars (daily limit, checked by the worker) -->
     <div id="st-drop" class="hide">
-      <div class="drhero"><div class="drico" aria-hidden="true">🪂</div><div class="drt" id="dr-t">Watch ads, earn Stars</div><div class="drs" id="dr-s">Loading…</div></div>
+      <div class="drhero"><div class="drico" aria-hidden="true">🎁</div><div class="drt" id="dr-t">Watch an ad, get a Stars reward</div><div class="drs" id="dr-s">Loading…</div></div>
       <div class="drdots" id="dr-dots" aria-hidden="true"></div>
       <div class="drcount" id="dr-count"></div>
       <div class="msg hide" id="dr-msg"></div>
       <button class="stok drgo" id="dr-go" type="button" disabled>Watch ad</button>
-      <div class="note">Watch an ad till the end to get Stars. Stars are added to your Group City balance. The limit resets every day at 00:00 (Myanmar time).</div>
+      <div class="note">Optional: watching ads is never required to use Group City. Watch an ad till the end to get a Stars reward. Stars are added to your Group City balance. The limit resets every day at 00:00 (Myanmar time).</div>
     </div>
     <!-- Buy: top-up packs (id st-body kept from v12) -->
     <div id="st-body" class="hide">

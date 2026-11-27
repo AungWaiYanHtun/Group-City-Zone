@@ -658,7 +658,7 @@
   // st-done (sent), st-recv (Receive), st-terms
   var ST_VIEWS = ["st-main", "st-body", "st-send", "st-done", "st-recv", "st-terms", "st-drop"];
   var ST_HEAD = { "st-main": ["Stars", "Your Group City balance"], "st-body": ["Buy Stars", "Top up your Group City balance"], "st-send": ["Send Stars", "To another Group City user"],
-    "st-done": ["Send Stars", "To another Group City user"], "st-recv": ["Receive Stars", "Share your ID or username"], "st-terms": ["Buy Stars", "Top up your Group City balance"], "st-drop": ["Airdrop", "Free Stars for members"] };
+    "st-done": ["Send Stars", "To another Group City user"], "st-recv": ["Receive Stars", "Share your ID or username"], "st-terms": ["Buy Stars", "Top up your Group City balance"], "st-drop": ["Reward", "Watch an ad, get free Stars"] };
   function stOnly(id) {
     ST_VIEWS.forEach(function (x) { $(x).classList.toggle("hide", x !== id); });
     stars.view = id;
@@ -742,7 +742,7 @@
     return true;
   }
 
-  // ---------- wallet: Airdrop (Adsgram Reward ads → Stars; the worker counts and limits) ----------
+  // ---------- wallet: Reward (Adsgram Reward ads → Stars; the worker counts and limits) ----------
   var AD_BLOCK = String((window.GC_CONFIG && GC_CONFIG.ADSGRAM_BLOCK_ID) || "").trim();
   var drop = { st: null, busy: false, timer: 0, ctl: null, sdk: null };
   function drMsg(t, kind) { var m = $("dr-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = t || ""; if (!t) m.classList.add("hide"); }
@@ -760,11 +760,11 @@
   function drRender() {
     var st = drop.st, go = $("dr-go"), dots = $("dr-dots");
     clearTimeout(drop.timer); dots.textContent = "";
-    if (!AD_BLOCK) { $("dr-t").textContent = "Airdrop is coming soon"; $("dr-s").textContent = "Free Stars for Group City members. Stay tuned!"; go.classList.add("hide"); $("dr-count").textContent = ""; return; }
+    if (!AD_BLOCK) { $("dr-t").textContent = "Rewards are coming soon"; $("dr-s").textContent = "Free Stars for Group City members. Stay tuned!"; go.classList.add("hide"); $("dr-count").textContent = ""; return; }
     go.classList.remove("hide");
     if (!inTg) { $("dr-s").textContent = "Open Group City in Telegram to watch ads and earn Stars."; go.disabled = true; go.textContent = "Watch ad"; return; }
     if (!st) { $("dr-s").textContent = "Loading…"; go.disabled = true; return; }
-    $("dr-t").textContent = "Watch ads, earn Stars";
+    $("dr-t").textContent = "Watch an ad, get a Stars reward";
     $("dr-s").textContent = "+" + st.per + " ⭐ for each ad · up to " + (st.per * st.limit) + " ⭐ a day";
     for (var i = 0; i < st.limit; i++) dots.appendChild(el("span", "drdot" + (i < st.done ? " on" : "")));
     $("dr-count").textContent = st.done + " / " + st.limit + " today";
@@ -779,7 +779,7 @@
     if (!req) return;
     req.then(function (d) {
       if (starsAuthLost(d)) return;
-      if (!d.ok) { drMsg(d.message || "Airdrop is not available right now.", "err"); return; }
+      if (!d.ok) { drMsg(d.message || "Rewards are not available right now.", "err"); return; }
       drop.st = d; if (typeof d.balance === "number") setBal(d.balance); drRender();
     }).catch(function () { drMsg("Couldn't connect. Check your connection.", "err"); });
   }
@@ -838,7 +838,7 @@
       case "refund_undo": return "Refund cancelled · Stars back";
       case "sent": return "Sent to " + peerLabel(it.peer);
       case "received": return "Received from " + peerLabel(it.peer);
-      case "airdrop": return "Airdrop · watched ad";
+      case "airdrop": return "Reward · watched ad";
     }
     return "Balance change";
   }
@@ -2735,6 +2735,8 @@
   $("st-a-send").onclick = function () { sdReset(""); stOnly("st-send"); };
   $("st-a-recv").onclick = function () { stOnly("st-recv"); rcMsg("", ""); renderRecv(); };
   $("st-a-drop").onclick = openDrop;
+  $("rwd-go").onclick = function () { openStars(); openDrop(); };   // 1-tap Reward entry on the Groups tab
+  if (!AD_BLOCK) $("rwd-card").classList.add("hide");
   $("dr-go").onclick = watchAd;
   $("st-a-buy").onclick = function () { stars.need = 0; stars.pick = 0; stMsg("", ""); stOnly("st-body"); renderPacks(); };
   $("sd-to").addEventListener("input", function () { sdLookup(false); });

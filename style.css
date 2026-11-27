@@ -729,3 +729,6 @@ html.dark #st-main .stcirc{background:rgba(255,255,255,.08)}
 #st-drop .msg{margin:10px 16px 0}
 .drgo:disabled{opacity:.55}
 #st-drop .note{padding:4px 18px 16px;text-align:center}
+
+/* Reward ad entry card on the Groups tab */
+.promo.rwd{background:linear-gradient(135deg,rgba(64,180,240,.18),rgba(29,143,216,.12));border-left-color:#2ea6e8}
