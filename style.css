@@ -440,7 +440,6 @@ html .screen.info.edit{z-index:17}
 
 /* ---------- ⭐ Stars balance (header pill, Stars sheet, Promote balance, Profile row) ---------- */
 .stico{width:20px;height:20px;flex:none}
-.stico path{fill:#f5a623;fill:url(#sg1)}
 .starpill{flex:none;display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 12px 0 8px;margin-right:8px;border:0;border-radius:16px;background:rgba(245,166,35,.15);color:var(--text);font-family:inherit;font-size:15px;font-weight:600;line-height:1;cursor:pointer;font-variant-numeric:tabular-nums;white-space:nowrap}
 .starpill:active,.starpill:hover{background:rgba(245,166,35,.24)}
 html.dark .starpill{background:rgba(245,183,47,.16)}

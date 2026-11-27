@@ -1,7 +1,7 @@
 // Group City website. Inside Telegram (opened as the Mini App) it logs in with Telegram initData; in a normal browser it
-// uses the Telegram Login Widget. Promotions are paid from the user's Group City Stars balance (kept by the worker);
+// uses the Telegram Login Widget. Promotions are paid from the user's City Coins balance (kept by the worker);
 // the balance is topped up with a Telegram Stars invoice (Telegram.WebApp.openInvoice inside Telegram).
-// Chat, support and profile use this site's own /api (Vercel functions + Supabase); groups and Stars payments
+// Chat, support and profile use this site's own /api (Vercel functions + Supabase); groups and City Coins payments
 // use the Cloudflare worker. All text from the server is put on the page with textContent (never innerHTML).
 (function () {
   "use strict";
@@ -544,15 +544,15 @@
   function setPkg(p) {
     pkg = p === "normal" ? "normal" : "top";
     $("pk-normal").classList.toggle("on", pkg === "normal"); $("pk-top").classList.toggle("on", pkg === "top");
-    $("pr-buy").textContent = "Pay · " + pkgCost() + " ⭐";
+    $("pr-buy").textContent = "Pay · " + pkgCost() + " 🪙";
     lowCheck();
   }
   function pkgCost() { return pkg === "top" ? data.topPrice : data.price; }
   function prices() {
     var d = data.days ? " · " + data.days + " days" : "";
-    $("pk-normal-p").textContent = data.price + " ⭐"; $("pk-top-p").textContent = data.topPrice + " ⭐";
+    $("pk-normal-p").textContent = data.price + " 🪙"; $("pk-top-p").textContent = data.topPrice + " 🪙";
     $("pk-normal-d").textContent = "Listed in All Groups" + d; $("pk-top-d").textContent = "Shown at the top" + d;
-    $("promo-sub").textContent = "From " + data.price + " Stars";
+    $("promo-sub").textContent = "From " + data.price + " City Coins";
     setPkg(pkg);
   }
   function catPicker() {
@@ -601,19 +601,19 @@
       if (d.error === "balance") { msg("", ""); showLow(Number(d.need) || Math.max(1, (Number(d.price) || pkgCost()) - (stars.bal || 0))); return; }
       if (d.ok) {
         var until = Number(d.until) ? " until " + new Date(Number(d.until)).toISOString().slice(0, 10) : "";
-        msg("✅ Paid " + (Number(d.price) || pkgCost()) + " ⭐ from your balance. Your group is listed" + (top ? " in ⭐ Featured" : " in All Groups") + until + ".", "okm");
+        msg("✅ Paid " + (Number(d.price) || pkgCost()) + " 🪙 from your balance. Your group is listed" + (top ? " in ⭐ Featured" : " in All Groups") + until + ".", "okm");
         resetForm(); mineLoaded = false;
         setTimeout(load, 800);
         return;
       }
-      msg(d.error === "nodb" ? "Stars balance is not available right now. Please try again later." : (d.message || "Something went wrong. Please try again."), "err");
+      msg(d.error === "nodb" ? "City Coins balance is not available right now. Please try again later." : (d.message || "Something went wrong. Please try again."), "err");
     }).catch(function () { busy = false; $("pr-buy").disabled = false; $("pr-terms-ok").disabled = false; showOnly("pr-form"); msg("Couldn't connect. Check your connection.", "err"); });
   }
-  // "Not enough Stars" box in the Promote form; its Top up opens the Stars sheet with a pack that covers the gap
+  // "Not enough City Coins" box in the Promote form; its Top up opens the City Coins sheet with a pack that covers the gap
   var lowNeed = 0;
   function showLow(need) {
     lowNeed = Math.max(1, Math.ceil(Number(need) || 1));
-    $("pr-low-d").textContent = "You have " + fmtStars(stars.bal || 0) + " ⭐. " + (pkg === "top" ? "TOP" : "Normal") + " costs " + fmtStars(pkgCost()) + " ⭐, so you need " + fmtStars(lowNeed) + " more.";
+    $("pr-low-d").textContent = "You have " + fmtStars(stars.bal || 0) + " 🪙. " + (pkg === "top" ? "TOP" : "Normal") + " costs " + fmtStars(pkgCost()) + " 🪙, so you need " + fmtStars(lowNeed) + " more.";
     $("pr-low").classList.remove("hide"); $("pr-buy").classList.add("hide");
   }
   function hideLow() { lowNeed = 0; $("pr-low").classList.add("hide"); $("pr-buy").classList.remove("hide"); }
@@ -622,7 +622,7 @@
     if (stars.bal != null && stars.bal >= pkgCost()) hideLow(); else showLow(pkgCost() - (stars.bal || 0));
   }
 
-  // ---------- Stars balance (worker D1) + top-up ----------
+  // ---------- City Coins balance (worker D1) + top-up ----------
   var stars = { bal: null, packs: [10, 50, 100, 250, 500], pick: 0, fromPromote: false, busy: false, termsPack: 0, gen: 0, view: "st-main", need: 0, max: 10000, me: null, hist: null, histGen: 0 };
   function loggedIn() { return inTg || !!getSession(); }
   function fmtStars(n) { return String(Math.max(0, Math.floor(Number(n) || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
@@ -630,8 +630,8 @@
     stars.bal = n == null ? null : Math.max(0, Math.floor(Number(n) || 0));
     var t = fmtStars(stars.bal || 0);
     $("hd-bal").textContent = t; $("st-bal").textContent = t; $("pr-bal-n").textContent = t; $("pf-stars-v").textContent = t; $("set-stars-v").textContent = t;
-    $("st-bal-b").textContent = t; $("sd-bal").textContent = "Balance: " + t + " ⭐ · up to " + fmtStars(stars.max) + " per transfer"; sdCheck();
-    $("hd-stars").setAttribute("aria-label", "Stars balance: " + t);
+    $("st-bal-b").textContent = t; $("sd-bal").textContent = "Balance: " + t + " 🪙 · up to " + fmtStars(stars.max) + " per transfer"; sdCheck();
+    $("hd-stars").setAttribute("aria-label", "City Coins balance: " + t);
     lowCheck();
   }
   function balReq() {
@@ -654,11 +654,11 @@
   }
   function starsOpen() { return !$("v-stars").classList.contains("hide"); }
   function stMsg(text, kind) { var m = $("st-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = text; if (!text) m.classList.add("hide"); }
-  // wallet views inside the Stars sheet: st-main (balance, Send / Receive / Buy, History), st-body (Buy packs), st-send,
+  // wallet views inside the City Coins sheet: st-main (balance, Send / Receive / Buy, History), st-body (Buy packs), st-send,
   // st-done (sent), st-recv (Receive), st-terms
   var ST_VIEWS = ["st-main", "st-body", "st-send", "st-done", "st-recv", "st-terms", "st-drop"];
-  var ST_HEAD = { "st-main": ["Stars", "Your Group City balance"], "st-body": ["Buy Stars", "Top up your Group City balance"], "st-send": ["Send Stars", "To another Group City user"],
-    "st-done": ["Send Stars", "To another Group City user"], "st-recv": ["Receive Stars", "Share your ID or username"], "st-terms": ["Buy Stars", "Top up your Group City balance"], "st-drop": ["Reward", "Watch an ad, get free Stars"] };
+  var ST_HEAD = { "st-main": ["City Coins", "Your Group City balance"], "st-body": ["Buy City Coins", "Top up your Group City balance"], "st-send": ["Send City Coins", "To another Group City user"],
+    "st-done": ["Send City Coins", "To another Group City user"], "st-recv": ["Receive City Coins", "Share your ID or username"], "st-terms": ["Buy City Coins", "Top up your Group City balance"], "st-drop": ["Reward", "Watch an ad, get free City Coins"] };
   function stOnly(id) {
     ST_VIEWS.forEach(function (x) { $(x).classList.toggle("hide", x !== id); });
     stars.view = id;
@@ -687,7 +687,7 @@
       b.setAttribute("data-pack", String(n));
       var ic = el("span", "stack"); for (var k = 0; k <= Math.min(i, 2); k++) ic.appendChild(starIcon());
       b.appendChild(ic);
-      var mid = el("span", "spi"); mid.appendChild(el("span", "spn", fmtStars(n) + " Stars"));
+      var mid = el("span", "spi"); mid.appendChild(el("span", "spn", fmtStars(n) + " City Coins"));
       if (n === stars.pick && (lowNeed || stars.need)) mid.appendChild(el("span", "spd", "Covers what you need"));
       b.appendChild(mid);
       b.appendChild(el("span", "spb", "Buy"));
@@ -698,8 +698,8 @@
   function starIcon() {
     var ns = "http://www.w3.org/2000/svg", sv = document.createElementNS ? document.createElementNS(ns, "svg") : el("svg");
     sv.setAttribute("viewBox", "0 0 24 24"); sv.setAttribute("aria-hidden", "true"); sv.setAttribute("class", "stico");
-    var pth = document.createElementNS ? document.createElementNS(ns, "path") : el("path");
-    pth.setAttribute("d", "M12 2.2l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.1l-5.9 3.2 1.3-6.6-4.9-4.6 6.6-.8z"); sv.appendChild(pth);
+    var u = document.createElementNS ? document.createElementNS(ns, "use") : el("use");
+    u.setAttribute("href", "#gc-coin"); try { u.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", "#gc-coin"); } catch (e) {} sv.appendChild(u);   // City Coins logo
     return sv;
   }
   function showStars() {
@@ -707,7 +707,7 @@
     $("st-login").classList.toggle("hide", logged);
     if (!logged) {
       ST_VIEWS.forEach(function (x) { $(x).classList.add("hide"); });
-      $("st-title").textContent = "Stars"; $("st-sub").textContent = "Your Group City balance"; $("st-back").classList.add("hide");
+      $("st-title").textContent = "City Coins"; $("st-sub").textContent = "Your Group City balance"; $("st-back").classList.add("hide");
       mountLogin($("login-stars")); return;
     }
     stOnly(stars.view || "st-main");
@@ -742,7 +742,7 @@
     return true;
   }
 
-  // ---------- wallet: Reward (Adsgram Reward ads → Stars; the worker counts and limits) ----------
+  // ---------- wallet: Reward (Adsgram Reward ads → City Coins; the worker counts and limits) ----------
   var AD_BLOCK = String((window.GC_CONFIG && GC_CONFIG.ADSGRAM_BLOCK_ID) || "").trim();
   var drop = { st: null, busy: false, timer: 0, ctl: null, sdk: null };
   function drMsg(t, kind) { var m = $("dr-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = t || ""; if (!t) m.classList.add("hide"); }
@@ -760,19 +760,19 @@
   function drRender() {
     var st = drop.st, go = $("dr-go"), dots = $("dr-dots");
     clearTimeout(drop.timer); dots.textContent = "";
-    if (!AD_BLOCK) { $("dr-t").textContent = "Rewards are coming soon"; $("dr-s").textContent = "Free Stars for Group City members. Stay tuned!"; go.classList.add("hide"); $("dr-count").textContent = ""; return; }
+    if (!AD_BLOCK) { $("dr-t").textContent = "Rewards are coming soon"; $("dr-s").textContent = "Free City Coins for Group City members. Stay tuned!"; go.classList.add("hide"); $("dr-count").textContent = ""; return; }
     go.classList.remove("hide");
-    if (!inTg) { $("dr-s").textContent = "Open Group City in Telegram to watch ads and earn Stars."; go.disabled = true; go.textContent = "Watch ad"; return; }
+    if (!inTg) { $("dr-s").textContent = "Open Group City in Telegram to watch ads and earn City Coins."; go.disabled = true; go.textContent = "Watch ad"; return; }
     if (!st) { $("dr-s").textContent = "Loading…"; go.disabled = true; return; }
-    $("dr-t").textContent = "Watch an ad, get a Stars reward";
-    $("dr-s").textContent = "+" + st.per + " ⭐ for each ad · up to " + (st.per * st.limit) + " ⭐ a day";
+    $("dr-t").textContent = "Watch an ad, get a City Coins reward";
+    $("dr-s").textContent = "+" + st.per + " 🪙 for each ad · up to " + (st.per * st.limit) + " 🪙 a day";
     for (var i = 0; i < st.limit; i++) dots.appendChild(el("span", "drdot" + (i < st.done ? " on" : "")));
     $("dr-count").textContent = st.done + " / " + st.limit + " today";
     var left = st.next_at ? st.next_at - Date.now() : 0;
     if (st.done >= st.limit) { go.disabled = true; go.textContent = "Come back tomorrow"; return; }
     if (drop.busy) { go.disabled = true; go.textContent = "Loading ad…"; return; }
     if (left > 0) { go.disabled = true; go.textContent = "Next ad in " + Math.ceil(left / 1000) + "s"; drop.timer = setTimeout(drRender, 1000); return; }
-    go.disabled = false; go.textContent = "Watch ad  +" + st.per + " ⭐";
+    go.disabled = false; go.textContent = "Watch ad  +" + st.per + " 🪙";
   }
   function drStatus() {
     var req = starsReq("airdrop");
@@ -804,14 +804,14 @@
         if (starsAuthLost(d)) return;
         if (typeof d.balance === "number") setBal(d.balance);
         if (d.limit) drop.st = { done: d.done, limit: d.limit, per: d.per, next_at: d.next_at };
-        if (d.ok) { drMsg("+" + d.added + " ⭐ added to your balance!", "okm"); try { tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success"); } catch (e) {} }
-        else drMsg(d.message || "Couldn't add Stars. Please try again.", "err");
+        if (d.ok) { drMsg("+" + d.added + " 🪙 added to your balance!", "okm"); try { tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success"); } catch (e) {} }
+        else drMsg(d.message || "Couldn't add City Coins. Please try again.", "err");
         drRender();
       });
     }).catch(function (r) {
       drop.busy = false;
       var why = r && r.description ? String(r.description) : "";
-      drMsg(/skip|close/i.test(why) ? "Watch the ad till the end to get Stars." : (why === "login" ? "Please log in again." : "No ad available right now. Try again later."), "err");
+      drMsg(/skip|close/i.test(why) ? "Watch the ad till the end to get City Coins." : (why === "login" ? "Please log in again." : "No ad available right now. Try again later."), "err");
       drRender();
     });
   }
@@ -831,11 +831,11 @@
   }
   function histTitle(it) {
     switch (it.type) {
-      case "topup": return "Bought Stars";
+      case "topup": return "Bought City Coins";
       case "promote": return it.top ? "Promote · TOP" : "Promote · Normal";
-      case "promote_refund": return "Promote not added · Stars back";
+      case "promote_refund": return "Promote not added · City Coins back";
       case "refund": return "Top-up refunded";
-      case "refund_undo": return "Refund cancelled · Stars back";
+      case "refund_undo": return "Refund cancelled · City Coins back";
       case "sent": return "Sent to " + peerLabel(it.peer);
       case "received": return "Received from " + peerLabel(it.peer);
       case "airdrop": return "Reward · watched ad";
@@ -860,7 +860,7 @@
     var h = stars.hist;
     if (h == null) { box.appendChild(el("div", "hempty", "Loading…")); return; }
     if (h === "err") { box.appendChild(el("div", "hempty", "Couldn't load history.")); return; }
-    if (!h.length) { box.appendChild(el("div", "hempty", "No transactions yet. Buy, send or receive Stars and they show up here.")); return; }
+    if (!h.length) { box.appendChild(el("div", "hempty", "No transactions yet. Buy, send or receive City Coins and they show up here.")); return; }
     h.forEach(function (it) { if (it && typeof it === "object") box.appendChild(histRow(it)); });
   }
   function loadHist() {
@@ -893,16 +893,16 @@
     var a = sdAmount();
     Array.prototype.forEach.call($("sd-chips").children, function (b) { b.classList.toggle("on", Number(b.getAttribute("data-amt")) === a); });
   }
-  // validates the form and sets the Send button ("Send ⭐ 50"); also shows Not enough Stars + Top up
+  // validates the form and sets the Send button ("Send 🪙 50"); also shows Not enough City Coins + Top up
   function sdCheck() {
     if (!$("sd-go") || !sd) return false;
     var a = sdAmount(), bal = stars.bal || 0, go = $("sd-go"), low = false, okv = true;
-    go.textContent = a ? "Send ⭐ " + fmtStars(a) : "Send ⭐";
+    go.textContent = a ? "Send 🪙 " + fmtStars(a) : "Send 🪙";
     if (!sd.user || sd.busy) okv = false;
     if (a < 1) okv = false;
-    if (a > stars.max) { okv = false; if (!sd.busy) sdMsg("You can send up to " + fmtStars(stars.max) + " Stars at a time.", "err"); }
-    else if (a > 0 && stars.bal != null && a > bal) { okv = false; low = true; if (!sd.busy) sdMsg("Not enough Stars. You have " + fmtStars(bal) + " ⭐, so you need " + fmtStars(a - bal) + " more.", "err"); }
-    else if (/^(You can send up to|Not enough Stars)/.test($("sd-msg").textContent)) sdMsg("", "");
+    if (a > stars.max) { okv = false; if (!sd.busy) sdMsg("You can send up to " + fmtStars(stars.max) + " City Coins at a time.", "err"); }
+    else if (a > 0 && stars.bal != null && a > bal) { okv = false; low = true; if (!sd.busy) sdMsg("Not enough City Coins. You have " + fmtStars(bal) + " 🪙, so you need " + fmtStars(a - bal) + " more.", "err"); }
+    else if (/^(You can send up to|Not enough City Coins)/.test($("sd-msg").textContent)) sdMsg("", "");
     $("sd-topup").classList.toggle("hide", !low);
     go.disabled = !okv;
     return okv;
@@ -938,7 +938,7 @@
           return;
         }
         sdWho(null);
-        sdErr(d.error === "notfound" ? "User not found. They must open Group City once." : d.error === "self" ? "You can't send Stars to yourself." : (d.message || "Couldn't find this user."));
+        sdErr(d.error === "notfound" ? "User not found. They must open Group City once." : d.error === "self" ? "You can't send City Coins to yourself." : (d.message || "Couldn't find this user."));
       }).catch(function () { if (my === sd.seq) { sd.look = false; sdWho(null); sdErr("Couldn't connect. Check your connection."); } });
     };
     if (now) go(); else sd.timer = setTimeout(go, 600);
@@ -965,9 +965,9 @@
     var a = sdAmount(), u = sd.user, note = String($("sd-note").value || "").trim();
     if (!sd.key) sd.key = newKey();            // one key per attempt: a retry after a lost answer can't send twice
     var av = $("sd-conf-av"); av.textContent = ""; av.appendChild(avatar(u.photo || "", u.name, u.id, "av sdcav"));
-    $("sd-conf-t").textContent = "Send " + fmtStars(a) + " ⭐ to " + u.name + "?";
-    $("sd-conf-d").textContent = (u.username ? "@" + u.username + " · " : "") + "ID " + u.id + (note ? "\nNote: " + note : "") + "\nSent Stars can't be refunded.";
-    $("sd-conf-ok").textContent = "Send ⭐ " + fmtStars(a); $("sd-conf-ok").disabled = false;
+    $("sd-conf-t").textContent = "Send " + fmtStars(a) + " 🪙 to " + u.name + "?";
+    $("sd-conf-d").textContent = (u.username ? "@" + u.username + " · " : "") + "ID " + u.id + (note ? "\nNote: " + note : "") + "\nSent City Coins can't be refunded.";
+    $("sd-conf-ok").textContent = "Send 🪙 " + fmtStars(a); $("sd-conf-ok").disabled = false;
     sdConfShow(true);
   }
   function sdSend() {
@@ -987,19 +987,19 @@
       }
       sd.key = "";   // refused: nothing moved, the next tap is a new attempt
       if (d.balance != null && isFinite(Number(d.balance))) setBal(Number(d.balance));
-      if (d.error === "balance") { sdMsg("", ""); sdCheck(); if (!/Not enough/.test($("sd-msg").textContent)) sdMsg("Not enough Stars. You have " + fmtStars(stars.bal || 0) + " ⭐.", "err"); $("sd-topup").classList.remove("hide"); return; }
-      if (d.error === "notfound" || d.error === "self") { sd.user = null; sdWho(null); sdErr(d.error === "self" ? "You can't send Stars to yourself." : "User not found. They must open Group City once."); sdMsg("", ""); sdCheck(); return; }
-      sdMsg(d.error === "nodb" ? "Stars balance is not available right now. Please try again later." : (d.message || "Something went wrong. Please try again."), "err"); sdCheck();
+      if (d.error === "balance") { sdMsg("", ""); sdCheck(); if (!/Not enough/.test($("sd-msg").textContent)) sdMsg("Not enough City Coins. You have " + fmtStars(stars.bal || 0) + " 🪙.", "err"); $("sd-topup").classList.remove("hide"); return; }
+      if (d.error === "notfound" || d.error === "self") { sd.user = null; sdWho(null); sdErr(d.error === "self" ? "You can't send City Coins to yourself." : "User not found. They must open Group City once."); sdMsg("", ""); sdCheck(); return; }
+      sdMsg(d.error === "nodb" ? "City Coins balance is not available right now. Please try again later." : (d.message || "Something went wrong. Please try again."), "err"); sdCheck();
     }).catch(function () {
       sd.busy = false; $("sd-conf-ok").disabled = false; sdConfShow(false); sdCheck();
       sdMsg("Couldn't connect. Tap Send to try again — you won't be charged twice.", "err");   // same key on retry
     });
   }
   function sdDone(a, u, note, d) {
-    $("sdd-t").textContent = fmtStars(a) + " Stars sent";
+    $("sdd-t").textContent = fmtStars(a) + " City Coins sent";
     $("sdd-d").textContent = "to " + u.name + (u.username ? " (@" + u.username + ")" : "");
     $("sdd-n").textContent = note ? "“" + note + "”" : ""; $("sdd-n").classList.toggle("hide", !note);
-    $("sdd-b").textContent = "Balance: " + fmtStars(d.balance != null ? d.balance : stars.bal) + " ⭐";
+    $("sdd-b").textContent = "Balance: " + fmtStars(d.balance != null ? d.balance : stars.bal) + " 🪙";
     stOnly("st-done");
     if (tg && tg.HapticFeedback) { try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) {} }
   }
@@ -1015,7 +1015,7 @@
     var u = anyUser(); return u && /^[A-Za-z0-9_]{1,40}$/.test(String(u.username || "")) ? String(u.username) : "";
   }
   function recvLink() { var id = myWalletId(); return id ? botLink("send_" + id) : ""; }
-  function recvText() { var l = recvLink(); return l ? "Send me Stars on Group City: " + l : ""; }
+  function recvText() { var l = recvLink(); return l ? "Send me City Coins on Group City: " + l : ""; }
   function rcMsg(text, kind) { var m = $("rc-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = text; if (!text) m.classList.add("hide"); }
   function renderRecv() {
     var id = myWalletId(), un = myWalletUser();
@@ -1034,7 +1034,7 @@
   }
   function recvShare() {
     var l = recvLink(); if (!l) return;
-    var txt = "Send me Stars on Group City";
+    var txt = "Send me City Coins on Group City";
     if (inTg) { open("https://t.me/share/url?url=" + encodeURIComponent(l) + "&text=" + encodeURIComponent(txt)); return; }
     try { if (navigator.share) { navigator.share({ title: "Group City", text: txt, url: l }).catch(function () {}); return; } } catch (e) {}
     copyText(recvText(), "Share text");
@@ -1056,13 +1056,13 @@
       if (d.error === "terms") { stars.termsPack = n; $("st-terms-text").textContent = String(d.terms || ""); stOnly("st-terms"); return; }
       stOnly("st-body");
       if (d.ok && isTgUrl(d.link)) { stMsg("", ""); payTopup(d.link, n); return; }
-      stMsg(d.error === "nodb" ? "Stars balance is not available right now. Please try again later." : (d.message || "Something went wrong. Please try again."), "err");
+      stMsg(d.error === "nodb" ? "City Coins balance is not available right now. Please try again later." : (d.message || "Something went wrong. Please try again."), "err");
     }).catch(function () { stars.busy = false; stOnly("st-body"); stMsg("Couldn't connect. Check your connection.", "err"); });
   }
   function payTopup(link, n) {
     var before = stars.bal || 0;
     var done = function (status) {
-      if (status === "paid") { stMsg("✅ Paid! Adding " + fmtStars(n) + " Stars to your balance…", "okm"); waitCredit(before + n, n, 0); }
+      if (status === "paid") { stMsg("✅ Paid! Adding " + fmtStars(n) + " City Coins to your balance…", "okm"); waitCredit(before + n, n, 0); }
       else if (status === "pending") { stMsg("Payment is being processed…", ""); waitCredit(before + n, n, 0); }
       else if (status === "cancelled") stMsg("Payment cancelled.", "");
       else if (status === "failed") stMsg("Payment failed. Please try again.", "err");
@@ -1073,7 +1073,7 @@
     $("st-refresh").classList.remove("hide");
     stars.waitFor = { target: before + n, n: n };
   }
-  var CREDIT_WAIT = [1500, 3000, 5000, 8000];   // the bot adds the Stars when Telegram confirms the payment
+  var CREDIT_WAIT = [1500, 3000, 5000, 8000];   // the bot adds the City Coins when Telegram confirms the payment
   function waitCredit(target, n, step) {
     loadBalance().then(function (b) {
       if (b != null && b >= target) { credited(n); return; }
@@ -1087,10 +1087,10 @@
       closeStars(); lowCheck();
       var enough = stars.bal >= pkgCost();
       if (enough) hideLow();
-      msg("✅ " + fmtStars(n) + " Stars added. Balance: " + fmtStars(stars.bal) + " ⭐." + (enough ? " Tap Pay to promote your group." : ""), "okm");
+      msg("✅ " + fmtStars(n) + " City Coins added. Balance: " + fmtStars(stars.bal) + " 🪙." + (enough ? " Tap Pay to promote your group." : ""), "okm");
       return;
     }
-    stMsg("✅ " + fmtStars(n) + " Stars added. Balance: " + fmtStars(stars.bal) + " ⭐", "okm"); renderPacks();
+    stMsg("✅ " + fmtStars(n) + " City Coins added. Balance: " + fmtStars(stars.bal) + " 🪙", "okm"); renderPacks();
   }
   function recheckCredit() {   // browser: back from Telegram, or "I paid · refresh balance"
     var w = stars.waitFor;
@@ -1136,7 +1136,7 @@
       });
       var rb = el("button", "big", "⭐ Promote a group"); rb.type = "button"; rb.onclick = function () { promote(); };
       box.appendChild(rb);
-      box.appendChild(el("div", "note", "Each promotion lists one group for " + (Number(d.days) || data.days) + " days, paid from your Stars balance. When it ends, promote it again."));
+      box.appendChild(el("div", "note", "Each promotion lists one group for " + (Number(d.days) || data.days) + " days, paid from your City Coins balance. When it ends, promote it again."));
     }).catch(function () { box.textContent = ""; var x = el("div", "empty"); x.appendChild(el("b", null, "Couldn't connect")); x.appendChild(document.createTextNode("Check your connection.")); box.appendChild(x); });
   }
 
@@ -2066,7 +2066,7 @@
     ["😀", "😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🤭 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕 🤑 🤠 😈 👿 👻 💀 👽 🤖 💩 😺 😸 😹 😻 😼 😽 🙀 😿 😾"],
     ["👍", "👍 👎 👌 🤌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 👏 🙌 👐 🤲 🤝 🙏 ✍️ 💪 🦾 👀 👁️ 👅 👄 💋 🫶 🙋 🙆 🙅 🤷 🤦 🙇 💁 🧏 👫 👬 👭 💏 💑 👪"],
     ["❤️", "❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ♥️ 💯 💢 💥 💫 💦 💨 🔥 ✨ ⭐ 🌟 ⚡ 🎉 🎊 🎁 🏆 🥇 👑 💎 💰 💸 📣 📢 🔔 ✅ ❌ ⚠️ ❓ ❗ 🆘 🔞 📌 🔗 💬 🗨️ 👉 🆕 🆓 🔝"],
-    ["🐶", "🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐔 🐧 🐦 🐤 🦄 🐝 🦋 🐌 🐞 🐢 🐍 🐙 🐬 🐳 🦈 🌸 🌹 🌺 🌻 🌼 🌷 🍀 🌿 🌴 🌈 ☀️ 🌙 ⭐ ☁️ ❄️ 🌊"],
+    ["🐶", "🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐔 🐧 🐦 🐤 🦄 🐝 🦋 🐌 🐞 🐢 🐍 🐙 🐬 🐳 🦈 🌸 🌹 🌺 🌻 🌼 🌷 🍀 🌿 🌴 🌈 ☀️ 🌙 🪙 ☁️ ❄️ 🌊"],
     ["🍔", "🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🌶️ 🌽 🍞 🧀 🍳 🍗 🍖 🍔 🍟 🍕 🌭 🥪 🌮 🍜 🍝 🍣 🍱 🍛 🍚 🍙 🍦 🍩 🍪 🎂 🍰 🍫 🍬 🍭 ☕ 🧋 🍺 🍻 🥂 🍷 🥤"],
     ["⚽", "⚽ 🏀 🏈 ⚾ 🎾 🏐 🎱 🏓 🏸 🥊 🎮 🕹️ 🎲 🎯 🎳 🎤 🎧 🎵 🎶 🎸 🎹 🎬 📷 📱 💻 ⌚ 🚗 🚕 🏍️ ✈️ 🚀 🏠 🏙️ 🌃 🎡 🏖️ ⛰️ 🗺️ 🇲🇲"]
   ];
@@ -2715,7 +2715,7 @@
   });
   $("q-x").onclick = function () { $("q").value = ""; searchInput(); try { $("q").focus(); } catch (e) {} };
   $("promo-add").onclick = function () { promote(); };
-  // floating button + header Stars pill (the old header ⋮ only opened Profile, which is in the bottom bar)
+  // floating button + header City Coins pill (the old header ⋮ only opened Profile, which is in the bottom bar)
   $("fab-add").onclick = function () { promote(); };
   $("hd-stars").onclick = function () { openStars(); };
   $("pf-stars").onclick = function () { openStars(); };
@@ -2725,7 +2725,7 @@
   $("st-close").onclick = closeStars;
   $("v-stars").addEventListener("click", function (e) { if (e.target === $("v-stars")) closeStars(); });
   $("st-terms-ok").onclick = function () { stOnly("st-body"); topup(stars.termsPack, true); };
-  $("st-terms-no").onclick = function () { stOnly("st-body"); stMsg("You need to agree to the terms before buying Stars.", ""); };
+  $("st-terms-no").onclick = function () { stOnly("st-body"); stMsg("You need to agree to the terms before buying City Coins.", ""); };
   $("st-refresh").onclick = recheckCredit;
   $("st-help").onclick = function () { open(botLink("paysupport")); };
   $("st-terms-l").onclick = function () { open(botLink("terms")); };
@@ -2773,8 +2773,8 @@
   var sp = (inTg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || (new URLSearchParams(location.search).get("tab") || "");
   if (sp === "promote") promote(); else if (sp === "mine" || sp === "profile" || sp === "msg") tab(sp);
   var sendTo = (/^send_(\d{1,20})$/.exec(sp) || [])[1] || (/^\d{1,20}$/.test(new URLSearchParams(location.search).get("send") || "") ? new URLSearchParams(location.search).get("send") : "");
-  if (sendTo) openStars({ send: sendTo });   // "Send me Stars" link → Send screen with them filled in
-  if (loggedIn()) loadBalance();   // header Stars pill
+  if (sendTo) openStars({ send: sendTo });   // "Send me City Coins" link → Send screen with them filled in
+  if (loggedIn()) loadBalance();   // header City Coins pill
   if (inTg) tgChatLogin().then(function () { renderAccount(); refreshTab(); if (current !== "msg") loadSummary(true); });
   else if (chatReady() && current !== "msg") loadSummary(true);   // unread badge on the bottom-nav Messages
   load();
