@@ -8,5 +8,5 @@ window.GC_CONFIG = {
   CATEGORIES: ["Chatting Group", "Dating Group", "Videos Group"],
   // Airdrop (Adsgram Reward ads). Paste the Reward blockId (digits) from partner.adsgram.ai for THIS Mini App's
   // platform (Web app url = this site). Empty = Airdrop shows "coming soon".
-  ADSGRAM_BLOCK_ID: "61688"
+  ADSGRAM_BLOCK_ID: "62186"
 };
