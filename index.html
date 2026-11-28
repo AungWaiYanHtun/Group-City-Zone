@@ -347,10 +347,39 @@
     <span class="ehsp" aria-hidden="true"></span>
   </div>
   <div class="ebody">
-    <div class="sethd" id="set-theme-l">Theme</div>
-    <div class="icard setcard"><div class="seg" id="set-theme" role="radiogroup" aria-labelledby="set-theme-l">
-      <button type="button" role="radio" data-theme="system">System</button><button type="button" role="radio" data-theme="light">Light</button><button type="button" role="radio" data-theme="dark">Dark</button>
-    </div></div>
+    <div class="sethd" id="set-preset-l">Themes</div>
+    <div class="hscroll" id="set-preset" role="radiogroup" aria-labelledby="set-preset-l">
+      <button type="button" role="radio" class="thcard" data-preset="classic"><span class="thprev pv-classic"><i></i><i></i><b></b></span><span class="thn">Classic</span></button>
+      <button type="button" role="radio" class="thcard" data-preset="day"><span class="thprev pv-day"><i></i><i></i><b></b></span><span class="thn">Day</span></button>
+      <button type="button" role="radio" class="thcard" data-preset="night"><span class="thprev pv-night"><i></i><i></i><b></b></span><span class="thn">Night</span></button>
+      <button type="button" role="radio" class="thcard" data-preset="ocean"><span class="thprev pv-ocean"><i></i><i></i><b></b></span><span class="thn">Ocean</span></button>
+      <button type="button" role="radio" class="thcard" data-preset="sunset"><span class="thprev pv-sunset"><i></i><i></i><b></b></span><span class="thn">Sunset</span></button>
+      <button type="button" role="radio" class="thcard" data-preset="forest"><span class="thprev pv-forest"><i></i><i></i><b></b></span><span class="thn">Forest</span></button>
+    </div>
+    <div class="sethd" id="set-font-l">Font</div>
+    <div class="hscroll" id="set-font" role="radiogroup" aria-labelledby="set-font-l">
+      <button type="button" role="radio" class="fcard" data-font="system"><span class="faa">Aa</span><span class="fn">System</span></button>
+      <button type="button" role="radio" class="fcard" data-font="inter"><span class="faa" style="font-family:Inter,Roboto,sans-serif">Aa</span><span class="fn">Inter</span></button>
+      <button type="button" role="radio" class="fcard" data-font="poppins"><span class="faa" style="font-family:Poppins,Roboto,sans-serif">Aa</span><span class="fn">Poppins</span></button>
+      <button type="button" role="radio" class="fcard" data-font="rounded"><span class="faa" style="font-family:Nunito,Roboto,sans-serif">Aa</span><span class="fn">Rounded</span></button>
+      <button type="button" role="radio" class="fcard" data-font="comfortaa"><span class="faa" style="font-family:Comfortaa,Roboto,sans-serif">Aa</span><span class="fn">Comfortaa</span></button>
+      <button type="button" role="radio" class="fcard" data-font="serif"><span class="faa" style="font-family:Georgia,'Noto Serif',serif">Aa</span><span class="fn">Serif</span></button>
+    </div>
+    <div class="sethd">Appearance</div>
+    <div class="icard setcard">
+      <div class="setsub" id="set-theme-l">Theme</div>
+      <div class="seg" id="set-theme" role="radiogroup" aria-labelledby="set-theme-l">
+        <button type="button" role="radio" data-theme="system">System</button><button type="button" role="radio" data-theme="light">Light</button><button type="button" role="radio" data-theme="dark">Dark</button>
+      </div>
+      <div class="setsub sep" id="set-accent-l">Accent color</div>
+      <div class="swatches" id="set-accent" role="radiogroup" aria-labelledby="set-accent-l">
+        <button type="button" role="radio" data-accent="" style="--sw:#2aa05a" aria-label="Default green"></button><button type="button" role="radio" data-accent="#1677ff" style="--sw:#1677ff" aria-label="Blue"></button><button type="button" role="radio" data-accent="#8b3dff" style="--sw:#8b3dff" aria-label="Purple"></button><button type="button" role="radio" data-accent="#ff8a00" style="--sw:#ff8a00" aria-label="Orange"></button><button type="button" role="radio" data-accent="#ff2d87" style="--sw:#ff2d87" aria-label="Pink"></button><button type="button" role="radio" data-accent="#f0362b" style="--sw:#f0362b" aria-label="Red"></button><button type="button" role="radio" data-accent="#0aa8b8" style="--sw:#0aa8b8" aria-label="Teal"></button><button type="button" role="radio" data-accent="#d19a00" style="--sw:#d19a00" aria-label="Gold"></button>
+      </div>
+      <div class="setsub sep" id="set-tsize-l">Text size</div>
+      <div class="seg" id="set-tsize" role="radiogroup" aria-labelledby="set-tsize-l">
+        <button type="button" role="radio" data-tsize="small">Small</button><button type="button" role="radio" data-tsize="default">Default</button><button type="button" role="radio" data-tsize="large">Large</button>
+      </div>
+    </div>
     <div class="icard setcard">
       <button class="setrow" id="set-stars" type="button"><svg class="stico" viewBox="0 0 24 24" aria-hidden="true"><use href="#gc-coin"/></svg><span class="setl">City Coins balance</span><span class="setv" id="set-stars-v">0</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
       <button class="setrow" id="set-help" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.6"/><circle cx="12" cy="17" r=".6" class="dot"/></svg><span class="setl">Payment help</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>

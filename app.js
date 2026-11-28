@@ -18,21 +18,53 @@
   // in a browser; "light" / "dark" = always that look (saved on this device as gc_theme; html.thx turns off
   // Telegram's own theme colours so the choice really applies inside Telegram too).
   var THKEY = "gc_theme";
-  function themePref() { var v = ""; try { v = localStorage.getItem(THKEY) || ""; } catch (e) {} return v === "light" || v === "dark" ? v : "system"; }
+  function lsGet(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+  function lsSet(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
+  // Settings extras (this device only): colour preset (gc_preset), font (gc_font), accent colour (gc_accent), text size (gc_tsize)
+  var PRESETS = { day: { dark: false, bg: "#eef4fb" }, night: { dark: true, bg: "#0b0f17" }, ocean: { dark: true, bg: "#06222b" },
+    sunset: { dark: false, bg: "#fff3ea" }, forest: { dark: true, bg: "#0f1a14" } };
+  var FONTS = { inter: ["Inter", "Inter:wght@400;500;600;700"], poppins: ["Poppins", "Poppins:wght@400;500;600;700"],
+    rounded: ["Nunito", "Nunito:wght@400;500;600;700"], comfortaa: ["Comfortaa", "Comfortaa:wght@400;500;600;700"], serif: ["Georgia,'Noto Serif',serif", ""] };
+  function presetPref() { var v = lsGet("gc_preset"); return PRESETS[v] ? v : "classic"; }
+  function fontPref() { var v = lsGet("gc_font"); return FONTS[v] ? v : "system"; }
+  function accentPref() { var v = lsGet("gc_accent"); return /^#[0-9a-f]{6}$/i.test(v) ? v : ""; }
+  function tsizePref() { var v = lsGet("gc_tsize"); return v === "small" || v === "large" ? v : "default"; }
+  function applyLook() {
+    var root = document.documentElement, f = fontPref(), a = accentPref(), t = tsizePref();
+    if (FONTS[f] && FONTS[f][1] && !document.getElementById("gcf-" + f)) {
+      var l = document.createElement("link"); l.id = "gcf-" + f; l.rel = "stylesheet";
+      l.href = "https://fonts.googleapis.com/css2?family=" + FONTS[f][1] + "&display=swap"; document.head.appendChild(l);
+    }
+    if (f === "system") root.style.removeProperty("--gcfont"); else root.style.setProperty("--gcfont", FONTS[f][0]);
+    if (t === "default") root.removeAttribute("data-tsize"); else root.setAttribute("data-tsize", t);
+    var dark = root.classList.contains("dark");
+    ["--accent", "--btn", "--link", "--pillbg", "--bout", "--btimeout"].forEach(function (k) { root.style.removeProperty(k); });
+    if (a) {
+      root.style.setProperty("--accent", a); root.style.setProperty("--btn", a); root.style.setProperty("--link", a);
+      root.style.setProperty("--pillbg", "color-mix(in srgb," + a + " 16%,transparent)");
+      root.style.setProperty("--bout", "color-mix(in srgb," + a + (dark ? " 38%" : " 20%") + ",var(--bin))");
+      root.style.setProperty("--btimeout", "color-mix(in srgb," + a + " 70%,var(--text))");
+    }
+  }
+  function themePref() { var v = lsGet(THKEY); return v === "light" || v === "dark" ? v : "system"; }
   var applyTheme = (function () {
     var root = document.documentElement, mq = null;
     try { mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null; } catch (e) {}
     function apply() {
-      var p = themePref();
-      var dark = p === "dark" ? true : p === "light" ? false : (inTg ? tg.colorScheme === "dark" : !!(mq && mq.matches));
+      var p = themePref(), pr = presetPref(), P = PRESETS[pr];
+      var dark = P ? P.dark : p === "dark" ? true : p === "light" ? false : (inTg ? tg.colorScheme === "dark" : !!(mq && mq.matches));
       root.classList.toggle("dark", dark);
-      root.classList.toggle("thx", p !== "system");
+      root.classList.toggle("thx", !!P || p !== "system");
+      if (P) root.setAttribute("data-preset", pr); else root.removeAttribute("data-preset");
+      var hc = P ? P.bg : (dark ? "#17212b" : "#ffffff");
       if (inTg) {
         try {
-          if (tg.setHeaderColor) tg.setHeaderColor(p === "system" ? "bg_color" : (dark ? "#17212b" : "#ffffff"));
-          if (tg.setBackgroundColor) tg.setBackgroundColor(p === "system" ? "bg_color" : (dark ? "#17212b" : "#ffffff"));
+          if (tg.setHeaderColor) tg.setHeaderColor(!P && p === "system" ? "bg_color" : hc);
+          if (tg.setBackgroundColor) tg.setBackgroundColor(!P && p === "system" ? "bg_color" : hc);
         } catch (e) {}
       }
+      try { var mt = document.querySelector('meta[name="theme-color"]'); if (mt) mt.setAttribute("content", hc); } catch (e) {}
+      applyLook();
     }
     apply();
     try {
@@ -43,7 +75,8 @@
   })();
   function setTheme(p) {
     p = p === "light" || p === "dark" ? p : "system";
-    try { if (p === "system") localStorage.removeItem(THKEY); else localStorage.setItem(THKEY, p); } catch (e) {}
+    lsSet(THKEY, p === "system" ? "" : p);
+    lsSet("gc_preset", "");          // picking System / Light / Dark goes back to the Classic colours
     applyTheme();
   }
 
@@ -2365,11 +2398,18 @@
   $("pe-back").onclick = goBack;
 
   // ---------- Settings ----------
-  function themeUi() {
-    var p = themePref();
-    Array.prototype.forEach.call($("set-theme").children, function (b) {
-      var on = b.getAttribute("data-theme") === p; b.classList.toggle("on", on); b.setAttribute("aria-checked", on ? "true" : "false");
+  function markOn(id, attr, val) {
+    Array.prototype.forEach.call($(id).children, function (b) {
+      var on = (b.getAttribute(attr) || "") === val; b.classList.toggle("on", on); b.setAttribute("aria-checked", on ? "true" : "false");
     });
+  }
+  function themeUi() {
+    var pr = presetPref(), P = PRESETS[pr];
+    markOn("set-theme", "data-theme", P ? (P.dark ? "dark" : "light") : themePref());
+    markOn("set-preset", "data-preset", pr);
+    markOn("set-font", "data-font", fontPref());
+    markOn("set-accent", "data-accent", accentPref());
+    markOn("set-tsize", "data-tsize", tsizePref());
   }
   function openSettings() {
     themeUi();
@@ -2379,6 +2419,14 @@
     if (loggedIn()) loadBalance().then(function () { $("set-stars-v").textContent = fmtStars(stars.bal || 0); });
   }
   Array.prototype.forEach.call($("set-theme").children, function (b) { b.onclick = function () { setTheme(b.getAttribute("data-theme")); themeUi(); }; });
+  Array.prototype.forEach.call($("set-preset").children, function (b) { b.onclick = function () {
+    var v = b.getAttribute("data-preset"); lsSet("gc_preset", PRESETS[v] ? v : ""); if (!PRESETS[v]) lsSet(THKEY, ""); applyTheme(); themeUi(); }; });
+  Array.prototype.forEach.call($("set-font").children, function (b) { b.onclick = function () {
+    var v = b.getAttribute("data-font"); lsSet("gc_font", FONTS[v] ? v : ""); applyLook(); themeUi(); }; });
+  Array.prototype.forEach.call($("set-accent").children, function (b) { b.onclick = function () {
+    lsSet("gc_accent", b.getAttribute("data-accent") || ""); applyLook(); themeUi(); }; });
+  Array.prototype.forEach.call($("set-tsize").children, function (b) { b.onclick = function () {
+    var v = b.getAttribute("data-tsize"); lsSet("gc_tsize", v === "default" ? "" : v); applyLook(); themeUi(); }; });
   $("set-back").onclick = goBack;
   $("set-stars").onclick = function () { openStars(); };
   $("set-help").onclick = function () { open(botLink("paysupport")); };
