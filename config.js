@@ -10,5 +10,5 @@ window.GC_CONFIG = {
   // Empty = the Reward screen shows "coming soon".
   CLEANADS_PLACEMENT_ID: "pl_Q1kvznHjPi47",
   // true = CleanAds free sample ads (for testing, never paid). Set to false after CleanAds approves the app.
-  CLEANADS_TEST: true
+  CLEANADS_TEST: false
 };

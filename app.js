@@ -373,13 +373,20 @@
     img.alt = ""; img.referrerPolicy = "no-referrer"; img.loading = "lazy";
     img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%";
     img.onerror = function () { if (img.parentNode) img.parentNode.removeChild(img); if (a.gcSrc === src) a.textContent = letter(name); };
-    img.onload = function () { if (a.gcSrc !== src) return; a.textContent = ""; a.appendChild(img); };
+    img.onload = function () { if (a.gcSrc !== src || img.naturalWidth < 16) return; a.textContent = ""; a.appendChild(img); };
     if (/^data:/.test(src)) { a.textContent = ""; a.appendChild(img); }   // local data: shows at once
     img.src = src;
+  }
+  // Telegram profile photo of a PUBLIC group (t.me/name or @name). Private invite links (t.me/+...) have no public photo.
+  function groupPhoto(g) {
+    if (g && g.photo && photoOk(g.photo)) return g.photo;            // photo sent by the worker, if any
+    var u = String((g && g.url) || "").trim(), m = u.match(/^@([A-Za-z0-9_]{4,32})$/) || u.match(/^(?:https?:\/\/)?(?:t\.me|telegram\.me)\/([A-Za-z0-9_]{4,32})\/?(?:[?#].*)?$/i);
+    return m && !/^(joinchat|addlist|share|proxy|s|c|i)$/i.test(m[1]) ? "https://t.me/i/userpic/320/" + m[1] + ".jpg" : "";
   }
   function card(g, top) {
     var c = el("div", "card");
     var av = el("div", "av", letter(g.title)); av.style.background = color(g.title);
+    setAvImg(av, groupPhoto(g), g.title);   // the group's Telegram profile photo; letter while loading / if none
     var info = el("div", "info"), name = el("div", "name");
     name.appendChild(el("span", "t", g.title));
     if (top) name.appendChild(el("span", "badge", "TOP"));
