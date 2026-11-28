@@ -84,6 +84,29 @@
   var data = { featured: [], groups: [], bot: BOT, short: "", price: 10, topPrice: 50, days: 30 };
   var cat = "All", pkg = "top", busy = false, mineLoaded = false, current = "groups";
   // Group categories: the one list is CATEGORIES in config.js (the worker keeps the same allow-list).
+  // Every 🪙 in the app's text is shown as the City Coin logo (watches text changes; only touches text with 🪙)
+  function coinify(root) {
+    if (!root) return;
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), hits = [], n;
+    while ((n = w.nextNode())) if (n.nodeValue.indexOf("🪙") >= 0 && !(n.parentNode && /^(SCRIPT|STYLE|TEXTAREA|INPUT|text)$/i.test(n.parentNode.nodeName))) hits.push(n);
+    hits.forEach(function (t) {
+      var parts = t.nodeValue.split("🪙"), f = document.createDocumentFragment();
+      parts.forEach(function (p, k) {
+        if (p) f.appendChild(document.createTextNode(p));
+        if (k < parts.length - 1) { var im = document.createElement("img"); im.className = "ci"; im.src = "assets/city-coin-v2.png"; im.alt = "City Coins"; im.draggable = false; f.appendChild(im); }
+      });
+      t.parentNode.replaceChild(f, t);
+    });
+  }
+  coinify(document.body);
+  try {
+    new MutationObserver(function (ms) {
+      ms.forEach(function (m) {
+        if (m.type === "characterData") { if (m.target.nodeValue && m.target.nodeValue.indexOf("🪙") >= 0 && m.target.parentNode) coinify(m.target.parentNode); }
+        else Array.prototype.forEach.call(m.addedNodes, function (a) { if (a.nodeType === 3) { if (a.nodeValue.indexOf("🪙") >= 0 && a.parentNode) coinify(a.parentNode); } else if (a.nodeType === 1 && (a.textContent || "").indexOf("🪙") >= 0) coinify(a); });
+      });
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  } catch (e) {}
   var COIN_IMG = new Image(); COIN_IMG.src = "assets/city-coin-v2.png";   // City Coin logo (also #gc-coin in index.html)
   var CATS = (Array.isArray(CFG.CATEGORIES) ? CFG.CATEGORIES : []).map(function (c) { return String(c || "").trim(); })
     .filter(function (c, i, a) { return c && c !== "All" && a.indexOf(c) === i; });
@@ -996,9 +1019,9 @@
       t.setAttribute("transform", "rotate(" + (i * 360 / n) + ")"); t.setAttribute("fill", "#fff"); t.setAttribute("font-size", "19"); t.setAttribute("font-weight", "800");
       t.setAttribute("style", "paint-order:stroke;stroke:rgba(0,0,0,.28);stroke-width:2.5px");
       t.textContent = String(prizes[i]); svg.appendChild(t);
-      var c = document.createElementNS(ns, "text");
-      c.setAttribute("x", "0"); c.setAttribute("y", "-42"); c.setAttribute("text-anchor", "middle"); c.setAttribute("dominant-baseline", "middle");
-      c.setAttribute("transform", "rotate(" + (i * 360 / n) + ")"); c.setAttribute("font-size", "13"); c.textContent = "🪙"; svg.appendChild(c);
+      var c;
+      c = document.createElementNS(ns, "image"); c.setAttribute("href", "assets/city-coin-v2.png"); c.setAttribute("x", "-8"); c.setAttribute("y", "-50"); c.setAttribute("width", "16"); c.setAttribute("height", "16");
+      c.setAttribute("transform", "rotate(" + (i * 360 / n) + ")"); svg.appendChild(c);
     }
     w.textContent = ""; w.appendChild(svg); spin.built = true;
   }
