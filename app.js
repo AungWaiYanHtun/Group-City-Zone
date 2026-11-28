@@ -377,11 +377,14 @@
     if (/^data:/.test(src)) { a.textContent = ""; a.appendChild(img); }   // local data: shows at once
     img.src = src;
   }
-  // Telegram profile photo of a PUBLIC group (t.me/name or @name). Private invite links (t.me/+...) have no public photo.
+  // Telegram profile photo of a group: public t.me/name or @name from t.me; private invite links through the worker.
   function groupPhoto(g) {
     if (g && g.photo && photoOk(g.photo)) return g.photo;            // photo sent by the worker, if any
     var u = String((g && g.url) || "").trim(), m = u.match(/^@([A-Za-z0-9_]{4,32})$/) || u.match(/^(?:https?:\/\/)?(?:t\.me|telegram\.me)\/([A-Za-z0-9_]{4,32})\/?(?:[?#].*)?$/i);
-    return m && !/^(joinchat|addlist|share|proxy|s|c|i)$/i.test(m[1]) ? "https://t.me/i/userpic/320/" + m[1] + ".jpg" : "";
+    if (m && !/^(joinchat|addlist|share|proxy|s|c|i)$/i.test(m[1])) return "https://t.me/i/userpic/320/" + m[1] + ".jpg";
+    // private invite link (t.me/+... or t.me/joinchat/...): the worker sends the photo when the bot is in that group
+    if (/^https:\/\/(t|telegram)\.me\/(joinchat\/|\+)[A-Za-z0-9_-]{6,}/i.test(u) && API) return API + "/app/api/gphoto?u=" + encodeURIComponent(u);
+    return "";
   }
   function card(g, top) {
     var c = el("div", "card");
