@@ -10,5 +10,10 @@ window.GC_CONFIG = {
   // Empty = the Reward screen shows "coming soon".
   CLEANADS_PLACEMENT_ID: "pl_Q1kvznHjPi47",
   // true = CleanAds free sample ads (for testing, never paid). Set to false after CleanAds approves the app.
-  CLEANADS_TEST: false
+  CLEANADS_TEST: false,
+  // Second ad network (Adexium, adexium.io): shown only when CleanAds has no ad for this user.
+  // Paste the Placement ID (WID) from your Adexium Telegram Mini App placement. Empty = Adexium off.
+  ADEXIUM_WID: "",
+  // true = Adexium test ads on every request (never paid). Keep false for real ads.
+  ADEXIUM_DEBUG: false
 };

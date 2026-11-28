@@ -30,8 +30,8 @@
     <!-- browser only: Log in / your account (hidden inside Telegram) -->
     <div class="acctrow hide" id="acct-row"><div class="acct hide" id="acct-groups"></div></div>
     <div class="chips hide" id="chips"></div>
-    <!-- Reward ad entry: visible on the Groups tab, 1 tap opens the Reward screen (CleanAds rewarded ad) -->
-    <div class="promo rwd" id="rwd-card"><div><b>🎁 Watch an ad, get City Coins</b><span>Optional bonus · free City Coins every day</span></div><button id="rwd-go" type="button">Watch ad</button></div>
+    <!-- Missions entry: visible on the Groups tab, 1 tap opens Missions (Reward ads + Lucky Spin) -->
+    <div class="promo rwd" id="rwd-card"><div><b>🎯 Missions · free City Coins</b><span>Optional · watch ads, free daily Lucky Spin</span></div><button id="rwd-go" type="button">Open</button></div>
     <div class="promo hide" id="promo"><div><b>⭐ Promote your group</b><span id="promo-sub">From 10 City Coins</span></div><button id="promo-add" type="button">Add</button></div>
     <div id="list"><div class="empty">Loading groups…</div></div>
     <button class="fab" id="fab-add" type="button" aria-label="Promote your group"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5c-4.97 0-9 3.58-9 8 0 2.1.91 4 2.4 5.43L4.5 20.5l4.1-1.5c1.04.33 2.18.5 3.4.5 4.97 0 9-3.58 9-8s-4.03-8-9-8z"/><path d="M12 8v7M8.5 11.5h7"/></svg></button>
@@ -103,13 +103,29 @@
         <button class="stact" id="st-a-send" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></span><span class="stlab">Send</span></button>
         <button class="stact" id="st-a-recv" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5.5 12.5 12 19l6.5-6.5"/></svg></span><span class="stlab">Receive</span></button>
         <button class="stact" id="st-a-buy" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span class="stlab">Buy</span></button>
-        <button class="stact" id="st-a-drop" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.5a8.5 7 0 0 1 17 0"/><path d="M3.5 10.5c1.4-1.2 2.9-1.2 4.3 0 1.4-1.2 2.8-1.2 4.2 0 1.4-1.2 2.8-1.2 4.2 0 1.4-1.2 2.9-1.2 4.3 0"/><path d="M3.5 10.5 10 17M20.5 10.5 14 17M12 10.5V17"/><rect x="9.5" y="17" width="5" height="4" rx="1"/></svg></span><span class="stlab">Reward</span></button>
+        <button class="stact" id="st-a-drop" type="button"><span class="stcirc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.5a8.5 7 0 0 1 17 0"/><path d="M3.5 10.5c1.4-1.2 2.9-1.2 4.3 0 1.4-1.2 2.8-1.2 4.2 0 1.4-1.2 2.8-1.2 4.2 0 1.4-1.2 2.9-1.2 4.3 0"/><path d="M3.5 10.5 10 17M20.5 10.5 14 17M12 10.5V17"/><rect x="9.5" y="17" width="5" height="4" rx="1"/></svg></span><span class="stlab">Missions</span></button>
       </div>
       <div class="sthead">History</div>
       <div class="sthist" id="st-hist" role="list" aria-label="City Coins history"></div>
       <div class="stlinks"><button class="link inline" id="st-help" type="button">Payment help</button><span aria-hidden="true">·</span><button class="link inline" id="st-terms-l" type="button">Terms</button></div>
     </div>
-    <!-- Reward: watch CleanAds rewarded ads for City Coins (daily limit, checked by the worker) -->
+    <!-- Missions: list of ways to earn free City Coins -->
+    <div id="st-mis" class="hide">
+      <div class="mislist">
+        <button class="misrow" id="mis-ads" type="button"><span class="misic">📺</span><span class="mismid"><b>Watch ads</b><span id="mis-ads-s">+1 🪙 for each ad</span></span><span class="misv" id="mis-ads-v"></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+        <button class="misrow" id="mis-spin" type="button"><span class="misic">🎡</span><span class="mismid"><b>Lucky Spin</b><span>Free spin daily · win up to 50 🪙</span></span><span class="misv" id="mis-spin-v"></span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      </div>
+      <div class="note">Optional: missions are never required to use Group City. City Coins can't be withdrawn; use them to promote groups or send them to friends. Limits reset every day at 00:00 (Myanmar time).</div>
+    </div>
+    <!-- Lucky Spin: 1 free spin a day, more spins by watching an ad; the worker picks the prize -->
+    <div id="st-spin" class="hide">
+      <div class="wheelbox"><div class="wpin" aria-hidden="true"></div><div class="wheel" id="sp-wheel"></div><div class="whub" aria-hidden="true"><svg class="stico" viewBox="0 0 24 24"><use href="#gc-coin"/></svg></div></div>
+      <div class="drcount" id="sp-count">Loading…</div>
+      <div class="msg hide" id="sp-msg2"></div>
+      <button class="stok drgo" id="sp-go" type="button" disabled>Spin</button>
+      <div class="note" id="sp-odds">Chances: 1 🪙 60% · 2 🪙 15% · 3 🪙 13% · 5 🪙 7% · 10 🪙 4% · 50 🪙 1%. 1 free spin every day; watch an ad for another spin (spin ads have their own daily limit). Extra spins don't expire.</div>
+    </div>
+    <!-- Reward: watch rewarded ads for City Coins (daily limit, checked by the worker) -->
     <div id="st-drop" class="hide">
       <div class="drhero"><div class="drico" aria-hidden="true"><svg class="stico" viewBox="0 0 24 24" style="width:56px;height:56px"><use href="#gc-coin"/></svg></div><div class="drt" id="dr-t">Watch an ad, get a City Coins reward</div><div class="drs" id="dr-s">Loading…</div></div>
       <div class="drdots" id="dr-dots" aria-hidden="true"></div>

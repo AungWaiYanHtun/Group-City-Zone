@@ -700,9 +700,10 @@
   function stMsg(text, kind) { var m = $("st-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = text; if (!text) m.classList.add("hide"); }
   // wallet views inside the City Coins sheet: st-main (balance, Send / Receive / Buy, History), st-body (Buy packs), st-send,
   // st-done (sent), st-recv (Receive), st-terms
-  var ST_VIEWS = ["st-main", "st-body", "st-send", "st-done", "st-recv", "st-terms", "st-drop"];
+  var ST_VIEWS = ["st-main", "st-body", "st-send", "st-done", "st-recv", "st-terms", "st-drop", "st-mis", "st-spin"];
   var ST_HEAD = { "st-main": ["City Coins", "Your Group City balance"], "st-body": ["Buy City Coins", "Top up your Group City balance"], "st-send": ["Send City Coins", "To another Group City user"],
-    "st-done": ["Send City Coins", "To another Group City user"], "st-recv": ["Receive City Coins", "Share your ID or username"], "st-terms": ["Buy City Coins", "Top up your Group City balance"], "st-drop": ["Reward", "Watch an ad, get free City Coins"] };
+    "st-done": ["Send City Coins", "To another Group City user"], "st-recv": ["Receive City Coins", "Share your ID or username"], "st-terms": ["Buy City Coins", "Top up your Group City balance"], "st-drop": ["Reward", "Watch an ad, get free City Coins"],
+    "st-mis": ["Missions", "Earn free City Coins"], "st-spin": ["Lucky Spin", "Spin the wheel, win City Coins"] };
   function stOnly(id) {
     ST_VIEWS.forEach(function (x) { $(x).classList.toggle("hide", x !== id); });
     stars.view = id;
@@ -717,6 +718,7 @@
     if (v === "st-send" && !$("sd-conf").classList.contains("hide")) { sdConfShow(false); return; }
     if (v === "st-terms") { stOnly("st-body"); return; }
     if (v === "st-body" && stars.fromPromote) { closeStars(); return; }
+    if (v === "st-drop" || v === "st-spin") { if (spin.busy) return; openMissions(); return; }
     stOnly("st-main"); loadHist();
   }
   function packFor(need) {   // smallest pack that covers `need` (largest pack when none does)
@@ -786,10 +788,13 @@
     return true;
   }
 
-  // ---------- wallet: Reward (CleanAds rewarded ads → City Coins; the worker counts and limits) ----------
+  // ---------- wallet: Reward (CleanAds rewarded ads, Adexium as fallback → City Coins; the worker counts and limits) ----------
   var AD_BLOCK = String((window.GC_CONFIG && GC_CONFIG.CLEANADS_PLACEMENT_ID) || "").trim();
   var AD_TEST = !!(window.GC_CONFIG && GC_CONFIG.CLEANADS_TEST);
-  var drop = { st: null, busy: false, timer: 0, ctl: null, sdk: null };
+  var ADX_WID = String((window.GC_CONFIG && GC_CONFIG.ADEXIUM_WID) || "").trim();
+  var ADX_DEBUG = !!(window.GC_CONFIG && GC_CONFIG.ADEXIUM_DEBUG);
+  var HAS_ADS = !!(AD_BLOCK || ADX_WID);
+  var drop = { st: null, busy: false, timer: 0, ctl: null, sdk: null, adx: null, adxSdk: null };
   function drMsg(t, kind) { var m = $("dr-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = t || ""; if (!t) m.classList.add("hide"); }
   function loadAdSdk() {
     if (window.CleanAds) return Promise.resolve(window.CleanAds);
@@ -802,10 +807,62 @@
     });
     return drop.sdk;
   }
+  // Adexium (fallback when CleanAds has no ad): rewarded interstitial; resolves when the countdown finished
+  function loadAdxSdk() {
+    if (window.AdexiumWidget) return Promise.resolve(window.AdexiumWidget);
+    if (drop.adxSdk) return drop.adxSdk;
+    drop.adxSdk = new Promise(function (ok, no) {
+      var sc = document.createElement("script"); sc.src = "https://cdn.tgads.space/assets/js/adexium-widget.min.js"; sc.async = true;
+      sc.onload = function () { window.AdexiumWidget ? ok(window.AdexiumWidget) : no({ reason: "error" }); };
+      sc.onerror = function () { drop.adxSdk = null; no({ reason: "network_error" }); };
+      document.head.appendChild(sc);
+    });
+    return drop.adxSdk;
+  }
+  function showAdexium() {
+    return loadAdxSdk().then(function (W) {
+      if (!drop.adx) drop.adx = new W({ wid: ADX_WID, adFormat: "interstitial", debug: ADX_DEBUG });
+      var a = drop.adx;
+      return new Promise(function (ok, no) {
+        var done = false, shown = false, t = setTimeout(function () { end(no, { reason: "no_fill" }); }, 20000);
+        function end(fn, v) { if (done) return; done = true; clearTimeout(t); off(); fn(v); }
+        var L = {
+          adReceived: function (ads) { clearTimeout(t); shown = true; try { a.displayAd(ads); } catch (e) { end(no, { reason: "error" }); } },
+          noAdFound: function () { end(no, { reason: "no_fill" }); },
+          requestAdError: function () { end(no, { reason: "network_error" }); },
+          adPlaybackCompleted: function () { end(ok); },
+          adClosed: function () { setTimeout(function () { end(no, { reason: shown ? "closed_early" : "no_fill" }); }, 300); }
+        };
+        function off() { Object.keys(L).forEach(function (k) { try { a.off(k, L[k]); } catch (e) {} }); }
+        Object.keys(L).forEach(function (k) { a.on(k, L[k]); });
+        try { a.requestRewardedAd("interstitial"); } catch (e) { end(no, { reason: "error" }); }
+      });
+    });
+  }
+  function showCleanAds() {
+    return loadAdSdk().then(function (A) {
+      if (!drop.ctl) {
+        var uid = ""; try { uid = String((tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) || ""); } catch (e) {}
+        drop.ctl = A.init({ placementId: AD_BLOCK, userId: uid, test: AD_TEST });
+      }
+      return drop.ctl.show();   // CleanAds: resolves when the rewarded ad finished
+    });
+  }
+  // CleanAds first; when it has no ad (or fails to load), Adexium. Closing an ad early never falls through.
+  function showRewardAd() {
+    if (!AD_BLOCK) return showAdexium();
+    var p = showCleanAds();
+    if (!ADX_WID) return p;
+    return p.catch(function (r) {
+      var why = r ? String(r.reason || r.message || "") : "";
+      if (/closed_early|already_showing|skip|close/i.test(why)) throw r;
+      return showAdexium();
+    });
+  }
   function drRender() {
     var st = drop.st, go = $("dr-go"), dots = $("dr-dots");
     clearTimeout(drop.timer); dots.textContent = "";
-    if (!AD_BLOCK) { $("dr-t").textContent = "Rewards are coming soon"; $("dr-s").textContent = "Free City Coins for Group City members. Stay tuned!"; go.classList.add("hide"); $("dr-count").textContent = ""; return; }
+    if (!HAS_ADS) { $("dr-t").textContent = "Rewards are coming soon"; $("dr-s").textContent = "Free City Coins for Group City members. Stay tuned!"; go.classList.add("hide"); $("dr-count").textContent = ""; return; }
     go.classList.remove("hide");
     if (!inTg) { $("dr-s").textContent = "Open Group City in Telegram to watch ads and earn City Coins."; go.disabled = true; go.textContent = "Watch ad"; return; }
     if (!st) { $("dr-s").textContent = "Loading…"; go.disabled = true; return; }
@@ -830,20 +887,14 @@
   }
   function openDrop() {
     stOnly("st-drop"); drMsg(""); drop.st = null; drRender();
-    if (!AD_BLOCK || !inTg) return;
-    drStatus(); loadAdSdk().catch(function () {});
+    if (!HAS_ADS || !inTg) return;
+    drStatus(); if (AD_BLOCK) loadAdSdk().catch(function () {}); else loadAdxSdk().catch(function () {});
   }
   function watchAd() {
     var st = drop.st;
-    if (!st || drop.busy || !AD_BLOCK || !inTg || st.done >= st.limit) return;
+    if (!st || drop.busy || !HAS_ADS || !inTg || st.done >= st.limit) return;
     drop.busy = true; drMsg(""); drRender();
-    loadAdSdk().then(function (A) {
-      if (!drop.ctl) {
-        var uid = ""; try { uid = String((tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) || ""); } catch (e) {}
-        drop.ctl = A.init({ placementId: AD_BLOCK, userId: uid, test: AD_TEST });
-      }
-      return drop.ctl.show();   // CleanAds: resolves when the rewarded ad finished
-    }).then(function () {
+    showRewardAd().then(function () {
       var req = starsReq("adreward");
       if (!req) throw { description: "login" };
       return req.then(function (d) {
@@ -863,13 +914,123 @@
     });
   }
 
+  // ---------- wallet: Missions (Reward ads + Lucky Spin) ----------
+  function openMissions() {
+    stOnly("st-mis"); $("mis-ads-v").textContent = ""; $("mis-spin-v").textContent = "";
+    $("mis-ads").classList.toggle("hide", !HAS_ADS);
+    var r1 = starsReq("airdrop");
+    if (r1) r1.then(function (d) { if (d && d.ok) { $("mis-ads-v").textContent = d.done + " / " + d.limit; $("mis-ads-s").textContent = "+" + d.per + " 🪙 for each ad · " + d.limit + " ads a day"; } }).catch(function () {});
+    var r2 = starsReq("spin");
+    if (r2) r2.then(function (d) { if (d && d.ok) $("mis-spin-v").textContent = d.spins + (d.spins === 1 ? " spin" : " spins"); }).catch(function () {});
+  }
+  var spin = { st: null, busy: false, rot: 0, timer: 0, built: false };
+  var SPIN_COLORS = ["#ffd166", "#06d6a0", "#118ab2", "#ef476f", "#8b5cf6", "#f97316"];
+  function spinBuild(prizes) {
+    var w = $("sp-wheel"), n = prizes.length, ns = "http://www.w3.org/2000/svg", R = 100;
+    var svg = document.createElementNS(ns, "svg"); svg.setAttribute("viewBox", "-100 -100 200 200");
+    for (var i = 0; i < n; i++) {
+      var a0 = (i - 0.5) * 360 / n, a1 = (i + 0.5) * 360 / n;
+      var p = function (a) { var r = (a - 90) * Math.PI / 180; return (R * Math.cos(r)).toFixed(2) + " " + (R * Math.sin(r)).toFixed(2); };
+      var path = document.createElementNS(ns, "path");
+      path.setAttribute("d", "M0 0 L" + p(a0) + " A" + R + " " + R + " 0 0 1 " + p(a1) + " Z");
+      path.setAttribute("fill", SPIN_COLORS[i % SPIN_COLORS.length]); path.setAttribute("stroke", "#fff"); path.setAttribute("stroke-width", "1.5");
+      svg.appendChild(path);
+      var t = document.createElementNS(ns, "text");
+      t.setAttribute("x", "0"); t.setAttribute("y", "-62"); t.setAttribute("text-anchor", "middle"); t.setAttribute("dominant-baseline", "middle");
+      t.setAttribute("transform", "rotate(" + (i * 360 / n) + ")"); t.setAttribute("fill", "#fff"); t.setAttribute("font-size", "19"); t.setAttribute("font-weight", "800");
+      t.setAttribute("style", "paint-order:stroke;stroke:rgba(0,0,0,.28);stroke-width:2.5px");
+      t.textContent = String(prizes[i]); svg.appendChild(t);
+      var c = document.createElementNS(ns, "text");
+      c.setAttribute("x", "0"); c.setAttribute("y", "-42"); c.setAttribute("text-anchor", "middle"); c.setAttribute("dominant-baseline", "middle");
+      c.setAttribute("transform", "rotate(" + (i * 360 / n) + ")"); c.setAttribute("font-size", "13"); c.textContent = "🪙"; svg.appendChild(c);
+    }
+    w.textContent = ""; w.appendChild(svg); spin.built = true;
+  }
+  function spMsg(t, kind) { var m = $("sp-msg2"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = t || ""; if (!t) m.classList.add("hide"); }
+  function spinRender() {
+    var st = spin.st, go = $("sp-go");
+    clearTimeout(spin.timer);
+    if (!inTg && !getSession()) { $("sp-count").textContent = "Open Group City in Telegram to spin."; go.disabled = true; return; }
+    if (!st) { $("sp-count").textContent = "Loading…"; go.disabled = true; return; }
+    if (!spin.built && st.prizes) spinBuild(st.prizes);
+    $("sp-count").textContent = st.spins > 0 ? (st.spins + (st.spins === 1 ? " spin" : " spins") + " left" + (st.free ? " · today's free spin is ready" : "")) : "No spins left · spin ads today: " + st.ad_done + " / " + st.ad_limit;
+    if (spin.busy) { go.disabled = true; return; }
+    if (st.spins > 0) { go.disabled = false; go.textContent = st.free ? "Spin · Free" : "Spin"; return; }
+    if (!HAS_ADS || !inTg) { go.disabled = true; go.textContent = "Come back tomorrow"; return; }
+    if (st.ad_done >= st.ad_limit) { go.disabled = true; go.textContent = "Come back tomorrow"; return; }
+    var left = st.next_at ? st.next_at - Date.now() : 0;
+    if (left > 0) { go.disabled = true; go.textContent = "Next ad in " + Math.ceil(left / 1000) + "s"; spin.timer = setTimeout(spinRender, 1000); return; }
+    go.disabled = false; go.textContent = "📺 Watch ad for a spin";
+  }
+  function spinSet(d) {
+    if (typeof d.balance === "number") setBal(d.balance);
+    if (d.prizes) spin.st = { prizes: d.prizes, spins: d.spins, free: d.free, ad_done: d.ad_done, ad_limit: d.ad_limit, next_at: d.next_at };
+  }
+  function openSpin() {
+    stOnly("st-spin"); spMsg(""); spin.st = null; spinRender();
+    var req = starsReq("spin");
+    if (!req) return;
+    req.then(function (d) {
+      if (starsAuthLost(d)) return;
+      if (!d.ok) { spMsg(d.message || "Lucky Spin is not available right now.", "err"); return; }
+      spinSet(d); spinRender();
+    }).catch(function () { spMsg("Couldn't connect. Check your connection.", "err"); });
+    if (HAS_ADS && inTg) { if (AD_BLOCK) loadAdSdk().catch(function () {}); else loadAdxSdk().catch(function () {}); }
+  }
+  function spinPlay() {
+    var req = starsReq("spinplay");
+    if (!req) return;
+    spin.busy = true; spMsg(""); spinRender();
+    req.then(function (d) {
+      if (starsAuthLost(d)) { spin.busy = false; return; }
+      if (!d.ok) { spin.busy = false; spinSet(d); spMsg(d.message || "Couldn't spin. Please try again.", "err"); spinRender(); return; }
+      var n = (spin.st && spin.st.prizes ? spin.st.prizes.length : 6), seg = 360 / n;
+      var jitter = (Math.random() - 0.5) * seg * 0.6;
+      var target = 360 * 6 - d.index * seg + jitter;
+      spin.rot = spin.rot - (spin.rot % 360) + target;
+      var bal = d.balance; d.balance = undefined; spinSet(d);   // show the new balance after the wheel stops
+      $("sp-wheel").style.transform = "rotate(" + spin.rot + "deg)";
+      setTimeout(function () {
+        spin.busy = false; if (typeof bal === "number") setBal(bal);
+        spMsg("🎉 You won " + d.prize + " 🪙!", "okm");
+        try { tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success"); } catch (e) {}
+        spinRender();
+      }, 4400);
+    }).catch(function () { spin.busy = false; spMsg("Couldn't connect. Check your connection.", "err"); spinRender(); });
+  }
+  function spinAdThenCredit() {
+    spin.busy = true; spMsg(""); $("sp-go").textContent = "Loading ad…"; spinRender();
+    showRewardAd().then(function () {
+      var req = starsReq("spinad");
+      if (!req) throw { description: "login" };
+      return req.then(function (d) {
+        spin.busy = false;
+        if (starsAuthLost(d)) return;
+        spinSet(d);
+        if (d.ok) spMsg("+1 spin! Tap Spin.", "okm"); else spMsg(d.message || "Couldn't add the spin. Please try again.", "err");
+        spinRender();
+      });
+    }).catch(function (r) {
+      spin.busy = false;
+      var why = r ? String(r.reason || r.description || "") : "";
+      spMsg(/closed_early|skip|close/i.test(why) ? "Watch the ad till the end to get a spin." : (why === "login" ? "Please log in again." : "No ad available right now. Try again later."), "err");
+      spinRender();
+    });
+  }
+  $("sp-go").onclick = function () {
+    var st = spin.st; if (!st || spin.busy) return;
+    if (st.spins > 0) spinPlay(); else spinAdThenCredit();
+  };
+  $("mis-ads").onclick = function () { openDrop(); };
+  $("mis-spin").onclick = function () { openSpin(); };
+
   // ---------- wallet: History ----------
   function hDate(ts) {
     var d = new Date(Number(ts) || 0), M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     return M[d.getMonth()] + " " + d.getDate() + (d.getFullYear() !== new Date().getFullYear() ? ", " + d.getFullYear() : "") + " · " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
   }
   function peerLabel(p) { return p ? (p.username ? "@" + p.username : String(p.name || ("User " + p.id))) : "someone"; }
-  var H_ICON = { topup: "M12 5v14M5 12h14", promote: "M4 10v4h3l6 4V6L7 10zM16.5 9a4 4 0 010 6", promote_refund: "M9 14 4 9l5-5M4 9h11a5 5 0 010 10h-2", refund: "M9 14 4 9l5-5M4 9h11a5 5 0 010 10h-2", refund_undo: "M15 14l5-5-5-5M20 9H9a5 5 0 000 10h2", airdrop: "M3.5 10.5a8.5 7 0 0117 0M3.5 10.5 10 17M20.5 10.5 14 17M12 10.5V17M9.5 17h5v4h-5z", other: "M12 7v5l3 2" };
+  var H_ICON = { topup: "M12 5v14M5 12h14", promote: "M4 10v4h3l6 4V6L7 10zM16.5 9a4 4 0 010 6", promote_refund: "M9 14 4 9l5-5M4 9h11a5 5 0 010 10h-2", refund: "M9 14 4 9l5-5M4 9h11a5 5 0 010 10h-2", refund_undo: "M15 14l5-5-5-5M20 9H9a5 5 0 000 10h2", airdrop: "M3.5 10.5a8.5 7 0 0117 0M3.5 10.5 10 17M20.5 10.5 14 17M12 10.5V17M9.5 17h5v4h-5z", spin: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4", other: "M12 7v5l3 2" };
   function hIcon(type) {
     var ns = "http://www.w3.org/2000/svg", w = el("span", "hic hic-" + type);
     var sv = document.createElementNS ? document.createElementNS(ns, "svg") : el("svg"); sv.setAttribute("viewBox", "0 0 24 24"); sv.setAttribute("aria-hidden", "true");
@@ -886,6 +1047,7 @@
       case "sent": return "Sent to " + peerLabel(it.peer);
       case "received": return "Received from " + peerLabel(it.peer);
       case "airdrop": return "Reward · watched ad";
+      case "spin": return "Lucky Spin";
     }
     return "Balance change";
   }
@@ -2794,9 +2956,9 @@
   $("st-back").onclick = stBack;
   $("st-a-send").onclick = function () { sdReset(""); stOnly("st-send"); };
   $("st-a-recv").onclick = function () { stOnly("st-recv"); rcMsg("", ""); renderRecv(); };
-  $("st-a-drop").onclick = openDrop;
-  $("rwd-go").onclick = function () { openStars(); openDrop(); };   // 1-tap Reward entry on the Groups tab
-  if (!AD_BLOCK) $("rwd-card").classList.add("hide");
+  $("st-a-drop").onclick = openMissions;
+  $("rwd-go").onclick = function () { openStars(); openMissions(); };   // 1-tap Missions entry on the Groups tab
+  // Missions card stays: Lucky Spin works even without an ad network
   $("dr-go").onclick = watchAd;
   $("st-a-buy").onclick = function () { stars.need = 0; stars.pick = 0; stMsg("", ""); stOnly("st-body"); renderPacks(); };
   $("sd-to").addEventListener("input", function () { sdLookup(false); });

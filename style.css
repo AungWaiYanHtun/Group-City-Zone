@@ -775,3 +775,21 @@ html[data-tsize="large"] body{zoom:1.12}
 .swatches{display:flex;flex-wrap:wrap;gap:10px;padding:10px 16px 12px}
 .swatches button{width:34px;height:34px;border-radius:50%;border:0;background:var(--sw);cursor:pointer;box-shadow:0 0 0 2px var(--card)}
 .swatches button.on{box-shadow:0 0 0 3px var(--card),0 0 0 5.5px var(--sw)}
+
+/* ---------- Missions + Lucky Spin ---------- */
+.mislist{margin:14px 16px 6px;background:var(--sec);border-radius:16px;overflow:hidden}
+.misrow{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;color:var(--text);font:inherit;text-align:left;padding:14px 12px 14px 14px;cursor:pointer}
+.misrow+.misrow{border-top:1px solid var(--sep)}
+.misic{flex:none;width:42px;height:42px;border-radius:12px;background:var(--pillbg);display:flex;align-items:center;justify-content:center;font-size:22px}
+.mismid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.mismid b{font-size:16px;font-weight:600}
+.mismid span{font-size:13.5px;color:var(--hint)}
+.misv{flex:none;font-size:14px;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
+.misrow .chev{flex:none;width:18px;height:18px;fill:none;stroke:var(--hint);stroke-width:2}
+.wheelbox{position:relative;width:280px;height:280px;margin:22px auto 6px}
+.wheel{width:100%;height:100%;border-radius:50%;box-shadow:0 0 0 6px #f5b72a,0 0 0 9px #c97a0c,0 8px 24px rgba(0,0,0,.25);transition:transform 4.2s cubic-bezier(.12,.7,.08,1)}
+.wheel svg{width:100%;height:100%}
+.wpin{position:absolute;left:50%;top:-14px;z-index:2;width:0;height:0;margin-left:-14px;border-left:14px solid transparent;border-right:14px solid transparent;border-top:28px solid #e8402f;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
+.whub{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center}
+.whub svg{width:46px;height:46px}
+@media (prefers-reduced-motion:reduce){.wheel{transition-duration:.8s}}
