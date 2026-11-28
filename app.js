@@ -993,10 +993,59 @@
       setTimeout(function () {
         spin.busy = false; if (typeof bal === "number") setBal(bal);
         spMsg("🎉 You won " + d.prize + " 🪙!", "okm");
+        celebrate(d.prize);
         try { tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success"); } catch (e) {}
         spinRender();
       }, 4400);
     }).catch(function () { spin.busy = false; spMsg("Couldn't connect. Check your connection.", "err"); spinRender(); });
+  }
+  // Congratulations pop-up with confetti after a Lucky Spin win (bigger burst for bigger prizes)
+  function celebrate(prize) {
+    var old = $("gc-cele"); if (old) old.remove();
+    var big = prize >= 10;
+    var ov = el("div", "cele" + (big ? " big" : "")); ov.id = "gc-cele"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-live", "assertive");
+    var cv = document.createElement("canvas"); cv.className = "celecv"; ov.appendChild(cv);
+    var card = el("div", "celecard");
+    var ico = el("div", "celeico"); ico.innerHTML = '<svg viewBox="0 0 24 24"><use href="#gc-coin"/></svg>'; card.appendChild(ico);
+    card.appendChild(el("div", "celet", big ? "🎉 JACKPOT! 🎉" : "Congratulations 🎉"));
+    var amt = el("div", "celeamt"); amt.textContent = "+" + prize; card.appendChild(amt);
+    card.appendChild(el("div", "celes", "City Coins added to your balance"));
+    var ok = el("button", "stok celeok", "Collect"); ok.type = "button"; card.appendChild(ok);
+    ov.appendChild(card); document.body.appendChild(ov);
+    try { tg.HapticFeedback && tg.HapticFeedback.impactOccurred(big ? "heavy" : "medium"); } catch (e) {}
+    var ctx = cv.getContext("2d"), W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2), parts = [], raf = 0, t0 = Date.now();
+    function size() { W = window.innerWidth; H = window.innerHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+    size();
+    var COLS = ["#ffd34e", "#f5a623", "#ef476f", "#06d6a0", "#118ab2", "#8b5cf6", "#ffffff"];
+    function burst(x, y, n) {
+      for (var i = 0; i < n; i++) {
+        var a = Math.random() * Math.PI * 2, v = 4 + Math.random() * 8;
+        parts.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 6, s: 5 + Math.random() * 6, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4,
+          c: COLS[(Math.random() * COLS.length) | 0], coin: Math.random() < (big ? 0.3 : 0.15), life: 0 });
+      }
+    }
+    var n = big ? 160 : 90;
+    burst(W * 0.5, H * 0.42, n);
+    setTimeout(function () { burst(W * 0.15, H * 0.75, n / 2); burst(W * 0.85, H * 0.75, n / 2); }, 250);
+    if (big) setTimeout(function () { burst(W * 0.5, H * 0.3, n); }, 700);
+    function frame() {
+      ctx.clearRect(0, 0, W, H);
+      for (var i = parts.length - 1; i >= 0; i--) {
+        var p = parts[i]; p.life++;
+        p.vy += 0.22; p.vx *= 0.985; p.vy *= 0.985; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+        if (p.y > H + 30 || p.life > 260) { parts.splice(i, 1); continue; }
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+        if (p.coin) { ctx.fillStyle = "#f5b72a"; ctx.beginPath(); ctx.arc(0, 0, p.s * 0.9, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#c97a0c"; ctx.lineWidth = 1.5; ctx.stroke(); }
+        else { ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); }
+        ctx.restore();
+      }
+      if (parts.length || Date.now() - t0 < 1200) raf = requestAnimationFrame(frame);
+    }
+    if (!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) raf = requestAnimationFrame(frame);
+    requestAnimationFrame(function () { ov.classList.add("on"); });
+    function close() { cancelAnimationFrame(raf); ov.classList.remove("on"); setTimeout(function () { ov.remove(); }, 250); }
+    ok.onclick = close;
+    ov.addEventListener("click", function (e) { if (e.target === ov || e.target === cv) close(); });
   }
   function spinAdThenCredit() {
     spin.busy = true; spMsg(""); $("sp-go").textContent = "Loading ad…"; spinRender();
