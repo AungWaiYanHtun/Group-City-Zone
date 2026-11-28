@@ -17,7 +17,7 @@
   // light / dark look. Settings → Theme: "system" (default) = Telegram's colorScheme inside Telegram, the device setting
   // in a browser; "light" / "dark" = always that look (saved on this device as gc_theme; html.thx turns off
   // Telegram's own theme colours so the choice really applies inside Telegram too).
-  var THKEY = "gc_theme";
+  var THKEY = "gc_theme", THKEY_OLD = "gc_theme";
   function lsGet(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
   function lsSet(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
   // Settings extras (this device only): colour preset (gc_preset), font (gc_font), accent colour (gc_accent), text size (gc_tsize)
@@ -26,6 +26,7 @@
   var FONTS = { inter: ["Inter", "Inter:wght@400;500;600;700"], poppins: ["Poppins", "Poppins:wght@400;500;600;700"],
     rounded: ["Nunito", "Nunito:wght@400;500;600;700"], comfortaa: ["Comfortaa", "Comfortaa:wght@400;500;600;700"], serif: ["Georgia,'Noto Serif',serif", ""] };
   function presetPref() { var v = lsGet("gc_preset"); return PRESETS[v] ? v : "classic"; }
+  lsSet(THKEY_OLD, "");   // the System / Light / Dark switch was removed from Settings: Classic always follows Telegram / the device
   function fontPref() { var v = lsGet("gc_font"); return FONTS[v] ? v : "system"; }
   function accentPref() { var v = lsGet("gc_accent"); return /^#[0-9a-f]{6}$/i.test(v) ? v : ""; }
   function tsizePref() { var v = lsGet("gc_tsize"); return v === "small" || v === "large" ? v : "default"; }
@@ -2405,7 +2406,6 @@
   }
   function themeUi() {
     var pr = presetPref(), P = PRESETS[pr];
-    markOn("set-theme", "data-theme", P ? (P.dark ? "dark" : "light") : themePref());
     markOn("set-preset", "data-preset", pr);
     markOn("set-font", "data-font", fontPref());
     markOn("set-accent", "data-accent", accentPref());
@@ -2418,7 +2418,6 @@
     openScreen("v-set");
     if (loggedIn()) loadBalance().then(function () { $("set-stars-v").textContent = fmtStars(stars.bal || 0); });
   }
-  Array.prototype.forEach.call($("set-theme").children, function (b) { b.onclick = function () { setTheme(b.getAttribute("data-theme")); themeUi(); }; });
   Array.prototype.forEach.call($("set-preset").children, function (b) { b.onclick = function () {
     var v = b.getAttribute("data-preset"); lsSet("gc_preset", PRESETS[v] ? v : ""); if (!PRESETS[v]) lsSet(THKEY, ""); applyTheme(); themeUi(); }; });
   Array.prototype.forEach.call($("set-font").children, function (b) { b.onclick = function () {
