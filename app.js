@@ -865,8 +865,39 @@
   var AD_TEST = !!(window.GC_CONFIG && GC_CONFIG.CLEANADS_TEST);
   var ADX_WID = String((window.GC_CONFIG && GC_CONFIG.ADEXIUM_WID) || "").trim();
   var ADX_DEBUG = !!(window.GC_CONFIG && GC_CONFIG.ADEXIUM_DEBUG);
-  var HAS_ADS = !!(AD_BLOCK || ADX_WID);
-  var drop = { st: null, busy: false, timer: 0, ctl: null, sdk: null, adx: null, adxSdk: null };
+  // Monetag (monetag.com, Telegram Mini App SDK): when MONETAG_ZONE is set, ONLY Monetag is used (all earnings in one place)
+  var MZ = String((window.GC_CONFIG && GC_CONFIG.MONETAG_ZONE) || "").replace(/\D/g, "");
+  var HAS_ADS = !!(MZ || AD_BLOCK || ADX_WID);
+  var drop = { st: null, busy: false, timer: 0, ctl: null, sdk: null, adx: null, adxSdk: null, mt: null };
+  function loadMonetag() {
+    if (drop.mt) return drop.mt;
+    drop.mt = new Promise(function (ok, no) {
+      var fn = "show_" + MZ, t0 = Date.now();
+      if (typeof window[fn] !== "function") {
+        var sc = document.createElement("script"); sc.src = "https://libtl.com/sdk.js"; sc.async = true;
+        sc.setAttribute("data-zone", MZ); sc.setAttribute("data-sdk", fn);
+        sc.onerror = function () { drop.mt = null; no({ reason: "sdk_load" }); };
+        document.head.appendChild(sc);
+      }
+      (function wait() {
+        if (typeof window[fn] === "function") return ok(window[fn]);
+        if (Date.now() - t0 > 15000) { drop.mt = null; return no({ reason: "sdk_timeout" }); }
+        setTimeout(wait, 150);
+      })();
+    });
+    return drop.mt;
+  }
+  // resolves only when Monetag says the view counted (reward_event_type "valued"); the promise also resolves on an early close
+  function showMonetag() {
+    return loadMonetag().then(function (show) {
+      var u = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || {};
+      return show(u.id ? { ymid: String(u.id) } : undefined);
+    }).then(function (r) {
+      if (r && r.reward_event_type && r.reward_event_type !== "valued") throw { reason: "not_valued" };
+      return r;
+    }, function (e) { throw (e && e.reason) ? e : { reason: "monetag_no_ad" }; });
+  }
+  function preloadAds() { if (MZ) loadMonetag().catch(function () {}); else if (AD_BLOCK) loadAdSdk().catch(function () {}); else loadAdxSdk().catch(function () {}); }
   function drMsg(t, kind) { var m = $("dr-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = t || ""; if (!t) m.classList.add("hide"); }
   function loadAdSdk() {
     if (window.CleanAds) return Promise.resolve(window.CleanAds);
@@ -922,6 +953,7 @@
   }
   // CleanAds first; when it has no ad (or fails to load), Adexium. Closing an ad early never falls through.
   function showRewardAd() {
+    if (MZ) return showMonetag();
     if (!AD_BLOCK) return showAdexium();
     var p = showCleanAds();
     if (!ADX_WID) return p;
@@ -960,12 +992,12 @@
   function openDrop() {
     stOnly("st-drop"); drMsg(""); drop.st = null; drRender();
     if (!HAS_ADS || !inTg) return;
-    drStatus(); if (AD_BLOCK) loadAdSdk().catch(function () {}); else loadAdxSdk().catch(function () {});
+    drStatus(); preloadAds();
   }
   // readable message for a failed ad, with the network's reason code (no_fill, timeout, http_429, …) so problems can be traced
   function adFailMsg(r, what) {
     var why = r ? String(r.reason || r.description || r.message || "") : "";
-    if (/closed_early|skip|close/i.test(why)) return "Watch the ad till the end to get " + what + ".";
+    if (/closed_early|not_valued|skip|close/i.test(why)) return "Watch the ad till the end to get " + what + "." + (why === "not_valued" ? " (not_valued)" : "");
     if (why === "login") return "Please log in again.";
     if (why === "already_showing") return "An ad is already open. Please wait a moment.";
     return "No ad available right now. Try again later." + (why ? " (" + why.slice(0, 40) + ")" : "");
@@ -1054,7 +1086,7 @@
       if (!d.ok) { spMsg(d.message || "Lucky Spin is not available right now.", "err"); return; }
       spinSet(d); spinRender();
     }).catch(function () { spMsg("Couldn't connect. Check your connection.", "err"); });
-    if (HAS_ADS && inTg) { if (AD_BLOCK) loadAdSdk().catch(function () {}); else loadAdxSdk().catch(function () {}); }
+    if (HAS_ADS && inTg) preloadAds();
   }
   function spinPlay() {
     var req = starsReq("spinplay");

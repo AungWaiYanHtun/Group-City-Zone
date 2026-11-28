@@ -15,5 +15,8 @@ window.GC_CONFIG = {
   // Paste the Placement ID (WID) from your Adexium Telegram Mini App placement. Empty = Adexium off.
   ADEXIUM_WID: "",
   // true = Adexium test ads on every request (never paid). Keep false for real ads.
-  ADEXIUM_DEBUG: false
+  ADEXIUM_DEBUG: false,
+  // Monetag (monetag.com → Telegram Mini App → Rewarded Interstitial). Paste the MAIN zone id (numbers only).
+  // When this is set, ONLY Monetag ads are used (CleanAds and Adexium are skipped). Empty = Monetag off.
+  MONETAG_ZONE: ""
 };
