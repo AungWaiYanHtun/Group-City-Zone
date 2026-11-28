@@ -370,7 +370,7 @@
     a.gcSrc = src;
     if (!src) { a.textContent = letter(name); return; }
     var img = document.createElement("img");
-    img.alt = ""; img.referrerPolicy = "no-referrer"; img.loading = "lazy";
+    img.alt = ""; img.referrerPolicy = "no-referrer";   // no loading="lazy": a lazy image that is not on the page yet never loads
     img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%";
     img.onerror = function () { if (img.parentNode) img.parentNode.removeChild(img); if (a.gcSrc === src) a.textContent = letter(name); };
     img.onload = function () { if (a.gcSrc !== src || img.naturalWidth < 16) return; a.textContent = ""; a.appendChild(img); };
