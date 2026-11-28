@@ -53,7 +53,16 @@
 
     <div class="panel hide" id="pr-form">
       <div class="prbal"><span>Balance</span><button class="starpill sm" id="pr-bal" type="button" aria-label="City Coins balance"><svg class="stico" viewBox="0 0 24 24" aria-hidden="true"><use href="#gc-coin"/></svg><span class="spn" id="pr-bal-n">0</span></button><button class="link inline" id="pr-bal-top" type="button">Top up</button></div>
-      <div class="field"><span id="pr-cats-l">Category</span><div class="cats" id="pr-cats" role="radiogroup" aria-labelledby="pr-cats-l"></div></div>
+      <div class="field" id="pr-catf"><div class="cathead"><span id="pr-cats-l">Category</span><button class="link inline hide" id="pr-cat-edit" type="button">✏️ Edit</button></div><div class="cats" id="pr-cats" role="radiogroup" aria-labelledby="pr-cats-l"></div></div>
+      <!-- admin only: edit / add / delete categories (saved on the worker) -->
+      <div class="cated hide" id="pr-cated">
+        <div class="catedt">Edit categories <small>(admin)</small></div>
+        <div id="ce-rows"></div>
+        <button class="link inline" id="ce-add" type="button">＋ Add category</button>
+        <div class="msg hide" id="ce-msg"></div>
+        <div class="cedbtns"><button class="cebtn" id="ce-cancel" type="button">Cancel</button><button class="cebtn pri" id="ce-save" type="button">Save</button></div>
+        <div class="cenote">Renamed categories are renamed on listed groups too. Groups in a deleted category still show under All.</div>
+      </div>
       <label class="field"><span>Group name (optional)</span><input id="pr-title" type="text" maxlength="100" placeholder="My Group" autocomplete="off"></label>
       <label class="field"><span>Telegram link</span><input id="pr-url" type="url" maxlength="200" placeholder="https://t.me/yourgroup" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url"></label>
       <div class="pkgs">

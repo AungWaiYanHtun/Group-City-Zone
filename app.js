@@ -479,6 +479,7 @@
       if (d.bot) data.bot = String(d.bot);
       data.short = String(d.short || "");
       data.price = Number(d.price) || data.price; data.topPrice = Number(d.topPrice) || data.topPrice; data.days = Number(d.days) || data.days;
+      setCats(d.cats);
       prices(); $("promo").classList.remove("hide");
       chips(); render();
     }).catch(function () {
@@ -599,6 +600,53 @@
     $("promo-sub").textContent = "From " + data.price + " City Coins";
     setPkg(pkg);
   }
+  // categories from the worker (admin-edited list) replace config.js
+  function setCats(list) {
+    if (!Array.isArray(list) || !list.length) return;
+    CATS = list.map(function (c) { return String(c || "").trim(); }).filter(function (c, i, a) { return c && c !== "All" && a.indexOf(c) === i; });
+    if (prCat && CATS.indexOf(prCat) < 0) prCat = "";
+    if (!$("v-promote").classList.contains("hide")) catPicker();
+  }
+  // admin: edit / add / delete categories (the worker checks the admin)
+  var catAdmin = false;
+  function catAdminCheck() {
+    var req = starsReq("cats");
+    if (!req) return;
+    req.then(function (d) { if (d && d.ok) { catAdmin = !!d.admin; setCats(d.cats); $("pr-cat-edit").classList.toggle("hide", !catAdmin); } }).catch(function () {});
+  }
+  function ceMsg(t, kind) { var m = $("ce-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = t || ""; if (!t) m.classList.add("hide"); }
+  function ceRow(name) {
+    var r = el("div", "cerow"); r.setAttribute("data-orig", name || "");
+    var i = document.createElement("input"); i.type = "text"; i.maxLength = 24; i.value = name || ""; i.placeholder = "Category name"; r.appendChild(i);
+    var x = el("button", "cedel", "🗑"); x.type = "button"; x.setAttribute("aria-label", "Delete category");
+    x.onclick = function () { r.remove(); };
+    r.appendChild(x); $("ce-rows").appendChild(r); return i;
+  }
+  function catEditOpen(on) {
+    $("pr-cated").classList.toggle("hide", !on); $("pr-catf").classList.toggle("hide", on); ceMsg("");
+    if (on) { $("ce-rows").textContent = ""; CATS.forEach(function (c) { ceRow(c); }); }
+  }
+  $("pr-cat-edit").onclick = function () { catEditOpen(true); };
+  $("ce-cancel").onclick = function () { catEditOpen(false); };
+  $("ce-add").onclick = function () { if ($("ce-rows").children.length >= 20) { ceMsg("At most 20 categories.", "err"); return; } ceRow("").focus(); };
+  $("ce-save").onclick = function () {
+    var cats = [], renames = [], seen = {};
+    Array.prototype.forEach.call($("ce-rows").children, function (r) {
+      var v = r.querySelector("input").value.trim(), o = r.getAttribute("data-orig") || "";
+      if (!v || seen[v.toLowerCase()]) return; seen[v.toLowerCase()] = 1; cats.push(v);
+      if (o && o !== v) renames.push([o, v]);
+    });
+    if (!cats.length) { ceMsg("Keep at least one category.", "err"); return; }
+    var req = starsReq("cats", { cats: cats, renames: renames });
+    if (!req) { ceMsg("Please log in again.", "err"); return; }
+    $("ce-save").disabled = true; ceMsg("Saving…");
+    req.then(function (d) {
+      $("ce-save").disabled = false;
+      if (!d.ok) { ceMsg(d.message || "Couldn't save. Please try again.", "err"); return; }
+      setCats(d.cats); catEditOpen(false); catPicker(); chips(); render();
+      msg("Categories saved ✓", "okm");
+    }).catch(function () { $("ce-save").disabled = false; ceMsg("Couldn't connect. Check your connection.", "err"); });
+  };
   function catPicker() {
     var box = $("pr-cats"); box.textContent = "";
     $("pr-cats").parentNode.classList.toggle("hide", !CATS.length);
@@ -612,7 +660,7 @@
   function resetForm() { $("pr-url").value = ""; $("pr-title").value = ""; prCat = ""; catPicker(); }
   function msg(text, kind) { var m = $("pr-msg"); m.className = "msg" + (kind ? " " + kind : ""); m.textContent = text; if (!text) m.classList.add("hide"); }
   function showOnly(id) { ["pr-form", "pr-terms"].forEach(function (x) { $(x).classList.toggle("hide", x !== id); }); $("sheet").scrollTop = 0; }
-  function openSheet() { $("v-promote").classList.remove("hide"); document.body.classList.add("lock"); showPromote(); if (loggedIn()) loadBalance(); }
+  function openSheet() { $("v-promote").classList.remove("hide"); document.body.classList.add("lock"); catEditOpen(false); showPromote(); if (loggedIn()) { loadBalance(); catAdminCheck(); } }
   function closeSheet() { $("v-promote").classList.add("hide"); closeStars(); syncBack(); }
   function promote(prefill) {
     if (prefill && prefill.url) { $("pr-url").value = prefill.url; $("pr-title").value = prefill.title && prefill.title.charAt(0) !== "@" ? prefill.title : ""; }
@@ -890,6 +938,14 @@
     if (!HAS_ADS || !inTg) return;
     drStatus(); if (AD_BLOCK) loadAdSdk().catch(function () {}); else loadAdxSdk().catch(function () {});
   }
+  // readable message for a failed ad, with the network's reason code (no_fill, timeout, http_429, …) so problems can be traced
+  function adFailMsg(r, what) {
+    var why = r ? String(r.reason || r.description || r.message || "") : "";
+    if (/closed_early|skip|close/i.test(why)) return "Watch the ad till the end to get " + what + ".";
+    if (why === "login") return "Please log in again.";
+    if (why === "already_showing") return "An ad is already open. Please wait a moment.";
+    return "No ad available right now. Try again later." + (why ? " (" + why.slice(0, 40) + ")" : "");
+  }
   function watchAd() {
     var st = drop.st;
     if (!st || drop.busy || !HAS_ADS || !inTg || st.done >= st.limit) return;
@@ -908,8 +964,7 @@
       });
     }).catch(function (r) {
       drop.busy = false;
-      var why = r ? String(r.reason || r.description || "") : "";   // CleanAds reasons: no_fill, closed_early, already_showing, network_error, error
-      drMsg(/closed_early|skip|close/i.test(why) ? "Watch the ad till the end to get City Coins." : (why === "login" ? "Please log in again." : "No ad available right now. Try again later."), "err");
+      drMsg(adFailMsg(r, "City Coins"), "err");   // CleanAds reasons: no_fill, closed_early, already_showing, network_error, timeout, http_xxx
       drRender();
     });
   }
@@ -1052,17 +1107,16 @@
     showRewardAd().then(function () {
       var req = starsReq("spinad");
       if (!req) throw { description: "login" };
-      return req.then(function (d) {
+      return req.catch(function () { return { ok: false, error: "network", message: "Ad watched, but the spin couldn't be saved. Check your connection." }; }).then(function (d) {
         spin.busy = false;
         if (starsAuthLost(d)) return;
         spinSet(d);
-        if (d.ok) spMsg("+1 spin! Tap Spin.", "okm"); else spMsg(d.message || "Couldn't add the spin. Please try again.", "err");
+        if (d.ok) spMsg("+1 spin! Tap Spin.", "okm"); else spMsg((d.message || "Couldn't add the spin. Please try again.") + (d.error ? " (" + d.error + ")" : ""), "err");
         spinRender();
       });
     }).catch(function (r) {
       spin.busy = false;
-      var why = r ? String(r.reason || r.description || "") : "";
-      spMsg(/closed_early|skip|close/i.test(why) ? "Watch the ad till the end to get a spin." : (why === "login" ? "Please log in again." : "No ad available right now. Try again later."), "err");
+      spMsg(adFailMsg(r, "a spin"), "err");
       spinRender();
     });
   }
