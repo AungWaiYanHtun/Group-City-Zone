@@ -84,6 +84,7 @@
   var data = { featured: [], groups: [], bot: BOT, short: "", price: 10, topPrice: 50, days: 30 };
   var cat = "All", pkg = "top", busy = false, mineLoaded = false, current = "groups";
   // Group categories: the one list is CATEGORIES in config.js (the worker keeps the same allow-list).
+  var COIN_IMG = new Image(); COIN_IMG.src = "assets/city-coin-v2.png";   // City Coin logo (also #gc-coin in index.html)
   var CATS = (Array.isArray(CFG.CATEGORIES) ? CFG.CATEGORIES : []).map(function (c) { return String(c || "").trim(); })
     .filter(function (c, i, a) { return c && c !== "All" && a.indexOf(c) === i; });
   var prCat = "";                               // category picked in the Promote form ("" = not chosen yet)
@@ -1090,7 +1091,7 @@
         p.vy += 0.22; p.vx *= 0.985; p.vy *= 0.985; p.x += p.vx; p.y += p.vy; p.r += p.vr;
         if (p.y > H + 30 || p.life > 260) { parts.splice(i, 1); continue; }
         ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
-        if (p.coin) { ctx.fillStyle = "#f5b72a"; ctx.beginPath(); ctx.arc(0, 0, p.s * 0.9, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#c97a0c"; ctx.lineWidth = 1.5; ctx.stroke(); }
+        if (p.coin) { if (COIN_IMG.complete && COIN_IMG.naturalWidth) ctx.drawImage(COIN_IMG, -p.s, -p.s, p.s * 2, p.s * 2); else { ctx.fillStyle = "#f5b72a"; ctx.beginPath(); ctx.arc(0, 0, p.s * 0.9, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#c97a0c"; ctx.lineWidth = 1.5; ctx.stroke(); } }
         else { ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); }
         ctx.restore();
       }
